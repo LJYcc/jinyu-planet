@@ -1,0 +1,35 @@
+{
+  "name": "jinyu-planet",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint:eslint": "eslint --quiet --ext js,vue .",
+    "lint:prettier": "prettier --write \"**/*.{js,ts,mjs,cjs,json,tsx,css,less,scss,vue,html,md}\"",
+    "lint-staged:prettier": "prettier --write",
+    "lint-staged:eslint": "eslint --quiet",
+    "lint-staged:spell": "cspell --no-progress --no-summary --no-must-find-files",
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@nuxt/eslint": "^1.17.0",
+    "eslint": "^10.10.0",
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "@cspell/dict-lorem-ipsum": "^4.0.5",
+    "cspell": "^10.3.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1"
+  }
+}

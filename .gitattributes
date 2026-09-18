@@ -1,0 +1,12 @@
+# 文本文件在仓库和所有开发者本地都统一使用 LF
+* text=auto eol=lf
+
+# 二进制文件不做换行符处理
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
