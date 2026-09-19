@@ -1,0 +1,27 @@
+# Task 3：主题与帖子读取 API
+
+**描述：** 建立公开内容读取契约：主题列表、帖子游标列表和帖子详情。Prisma repository 只返回 `published` 内容，支持主题筛选和关键词搜索，并将数据库行转换为稳定的前端 DTO。
+
+**验收标准：**
+
+- [ ] `GET /api/topics` 按 `sort_order` 返回启用主题。
+- [ ] `GET /api/posts` 支持 `topic`、`q`、`cursor` 和 `limit`，只返回公开帖子且不会一次读取全部内容。
+- [ ] `GET /api/posts/:slug` 返回详情、主题、匿名昵称、标签、图片元数据和相关推荐；不存在/隐藏帖子返回 404。
+
+**验证：**
+
+- [ ] 使用种子/测试帖子分别验证默认列表、主题筛选、关键词搜索、下一页游标和 404。
+- [ ] 检查 API 响应不含会话令牌、数据库内部字段或未公开帖子。
+- [ ] 运行 `npm run lint:eslint` 和 `npm run build`。
+
+**依赖：** Task 1。
+
+**可能修改的文件：**
+
+- `server/api/topics.get.ts`
+- `server/api/posts/index.get.ts`
+- `server/api/posts/[slug].get.ts`
+- `server/repositories/postRepository.ts`
+- `app/types/post.ts`
+
+**预计范围：** 中等，5 个文件。

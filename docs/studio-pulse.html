@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="事务所，一个人维护的公开碎片本。" />
+    <title>事务所 - 把杂事放在这里</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <style>
+      :root {
+        --ink: #18251f;
+        --fog: #f5f5f0;
+        --paper: #fff;
+        --muted: #737c75;
+        --line: #d9ddd7;
+        --night: #10271f;
+        --night-2: #1c2925;
+        --lime: #d9f24a;
+        --gold: #eabf58;
+        --rose: #e7b8ad;
+        --sky: #cbdce4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--fog);
+        font-family: 'Noto Sans SC', sans-serif;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+      }
+      .shell {
+        width: min(1120px, calc(100% - 48px));
+        margin: 0 auto;
+      }
+      .mono {
+        font:
+          11px 'DM Mono',
+          monospace;
+        letter-spacing: 0.08em;
+      }
+      .overline {
+        font:
+          500 10px 'DM Mono',
+          monospace;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+      }
+      .hero {
+        min-height: 590px;
+        color: white;
+        position: relative;
+        background: #0f2b31
+          url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=2200&q=88') center
+          55% / cover no-repeat;
+        isolation: isolate;
+      }
+      .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(6, 21, 24, 0.58);
+        z-index: -1;
+      }
+      .hero-head {
+        height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+      }
+      .brand {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font:
+          700 15px 'Space Grotesk',
+          sans-serif;
+        letter-spacing: 0.05em;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 43px;
+        height: 22px;
+        border: 1px solid currentColor;
+        font:
+          500 9px 'DM Mono',
+          monospace;
+        letter-spacing: 0.06em;
+      }
+      .hero-nav {
+        display: flex;
+        gap: 23px;
+        align-items: center;
+        font:
+          10px 'DM Mono',
+          monospace;
+        letter-spacing: 0.08em;
+      }
+      .hero-nav a {
+        opacity: 0.7;
+      }
+      .hero-nav a.active,
+      .hero-nav a:hover {
+        opacity: 1;
+        color: var(--lime);
+      }
+      .hero-center {
+        min-height: 480px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .hero-stamp {
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        font:
+          500 10px 'DM Mono',
+          monospace;
+        color: var(--lime);
+      }
+      .hero h1 {
+        margin: 0;
+        font:
+          700 clamp(58px, 11vw, 135px)/0.85 'Space Grotesk',
+          sans-serif;
+        letter-spacing: 0.06em;
+      }
+      .hero p {
+        max-width: 410px;
+        margin: 22px 0;
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 12px;
+        line-height: 1.8;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 15px;
+        border: 0;
+        background: var(--lime);
+        color: var(--ink);
+        font:
+          600 11px 'Space Grotesk',
+          sans-serif;
+        cursor: pointer;
+      }
+      .hero-meta {
+        padding-bottom: 19px;
+        display: flex;
+        justify-content: space-between;
+        color: rgba(255, 255, 255, 0.65);
+      }
+      .hero-meta a {
+        color: var(--lime);
+      }
+      .intro {
+        background: var(--paper);
+        padding: 78px 0;
+      }
+      .intro-grid {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr;
+        gap: 88px;
+        align-items: start;
+      }
+      .intro-mark {
+        width: 150px;
+        aspect-ratio: 3/4;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: var(--fog);
+        border: 2px solid #909a95;
+        font:
+          600 48px/0.85 'Space Grotesk',
+          sans-serif;
+        letter-spacing: 0.05em;
+      }
+      .intro-mark small {
+        font:
+          10px 'DM Mono',
+          monospace;
+      }
+      .intro h2 {
+        margin: 14px 0 18px;
+        font:
+          600 clamp(26px, 3vw, 39px)/1.3 'Space Grotesk',
+          sans-serif;
+      }
+      .intro p {
+        max-width: 565px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.9;
+      }
+      .intro-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 24px;
+      }
+      .text-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--ink);
+        font:
+          600 11px 'Space Grotesk',
+          sans-serif;
+      }
+      .updates {
+        padding: 73px 0 84px;
+      }
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .section-head h2 {
+        margin: 9px 0 0;
+        font:
+          600 28px 'Space Grotesk',
+          sans-serif;
+      }
+      .section-head p {
+        max-width: 275px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+        text-align: right;
+      }
+      .mosaic {
+        display: grid;
+        grid-template-columns: 1.16fr 0.84fr 0.84fr;
+        grid-auto-rows: 220px;
+        margin-top: 27px;
+      }
+      .tile {
+        position: relative;
+        overflow: hidden;
+        padding: 22px;
+        background: var(--paper);
+      }
+      .tile::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 26, 26, 0.18);
+        transition: background 0.2s;
+      }
+      .tile:hover::before {
+        background: rgba(8, 26, 26, 0.38);
+      }
+      .tile img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: -1;
+      }
+      .tile-content {
+        height: 100%;
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        color: white;
+      }
+      .tile-large {
+        grid-row: span 2;
+      }
+      .tile-large h3 {
+        margin: auto 0 6px;
+        max-width: 360px;
+        font-size: 25px;
+        line-height: 1.45;
+      }
+      .tile h3 {
+        margin: auto 0 4px;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+      .tile-label {
+        padding: 5px 7px;
+        background: var(--lime);
+        color: var(--ink);
+        font:
+          10px 'DM Mono',
+          monospace;
+      }
+      .tile-meta {
+        color: rgba(255, 255, 255, 0.8);
+        font:
+          10px 'DM Mono',
+          monospace;
+      }
+      .tile-plain {
+        background: var(--paper);
+        color: var(--ink);
+      }
+      .tile-plain::before {
+        display: none;
+      }
+      .tile-plain h3 {
+        margin: 17px 0 5px;
+      }
+      .tile-plain .tile-content {
+        color: var(--ink);
+      }
+      .tile-plain .tile-meta {
+        color: var(--muted);
+      }
+      .tile-plain .tile-label {
+        background: var(--rose);
+      }
+      .tile-note {
+        margin-top: auto;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .topics {
+        background: #e9f0ed;
+        padding: 76px 0;
+      }
+      .topics-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr;
+        gap: 56px;
+        align-items: center;
+      }
+      .topic-image {
+        min-height: 360px;
+        background: url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1000&q=85')
+          center/cover;
+        filter: grayscale(70%);
+      }
+      .topics h2 {
+        margin: 8px 0 25px;
+        font:
+          600 34px/1.35 'Space Grotesk',
+          sans-serif;
+      }
+      .topic-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 23px;
+      }
+      .topic {
+        padding: 18px 0;
+        border-top: 1px solid #bfc8c2;
+      }
+      .topic:nth-last-child(-n + 2) {
+        border-bottom: 1px solid #bfc8c2;
+      }
+      .topic b {
+        font:
+          600 12px 'DM Mono',
+          monospace;
+        color: #728078;
+      }
+      .topic h3 {
+        margin: 8px 0 5px;
+        font-size: 15px;
+      }
+      .topic p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .weekly {
+        color: white;
+        background: var(--night);
+        padding: 76px 0 80px;
+      }
+      .weekly .section-head {
+        border-color: #53615b;
+      }
+      .weekly .section-head h2 {
+        color: white;
+      }
+      .weekly .section-head p {
+        color: #b4c1b9;
+      }
+      .weekly-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        margin-top: 26px;
+        background: #53615b;
+      }
+      .weekly-item {
+        min-height: 270px;
+        padding: 25px;
+        display: flex;
+        flex-direction: column;
+        background: var(--night);
+      }
+      .weekly-item:first-child {
+        background: var(--night-2);
+      }
+      .weekly-item .overline {
+        color: var(--lime);
+      }
+      .weekly-item h3 {
+        margin: 15px 0;
+        font-size: 20px;
+        line-height: 1.55;
+      }
+      .weekly-item p {
+        margin: 0;
+        color: #bdc9c1;
+        font-size: 12px;
+        line-height: 1.8;
+      }
+      .weekly-item a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: auto;
+        color: var(--lime);
+        font:
+          11px 'DM Mono',
+          monospace;
+      }
+      .latest {
+        background: var(--paper);
+        padding: 76px 0 84px;
+      }
+      .entry-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-top: 28px;
+      }
+      .entry {
+        border-top: 2px solid var(--ink);
+        padding-top: 15px;
+      }
+      .entry time {
+        color: var(--muted);
+        font:
+          10px 'DM Mono',
+          monospace;
+      }
+      .entry h3 {
+        margin: 10px 0 9px;
+        font-size: 17px;
+        line-height: 1.6;
+      }
+      .entry p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.75;
+      }
+      .entry a {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 18px;
+        font:
+          600 11px 'Space Grotesk',
+          sans-serif;
+      }
+      .subscribe {
+        padding: 40px 0;
+        color: white;
+        background: #28352f;
+      }
+      .subscribe-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 30px;
+      }
+      .subscribe h2 {
+        margin: 0;
+        font:
+          600 24px 'Space Grotesk',
+          sans-serif;
+      }
+      .subscribe p {
+        margin: 7px 0 0;
+        color: #bdc6bf;
+        font-size: 12px;
+      }
+      .subscribe-form {
+        display: flex;
+        min-width: 340px;
+        height: 40px;
+        background: white;
+      }
+      .subscribe-form input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        padding: 0 13px;
+        font-size: 12px;
+      }
+      .subscribe-form button {
+        border: 0;
+        padding: 0 14px;
+        background: var(--lime);
+        color: var(--ink);
+        font:
+          600 11px 'Space Grotesk',
+          sans-serif;
+        cursor: pointer;
+      }
+      footer {
+        min-height: 270px;
+        color: white;
+        background: #132920
+          url('https://images.unsplash.com/photo-1464278533981-50106e6176b1?auto=format&fit=crop&w=2200&q=85') center
+          65% / cover;
+        position: relative;
+        isolation: isolate;
+      }
+      .footer-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(8, 25, 21, 0.56);
+        z-index: -1;
+      }
+      .footer-inner {
+        min-height: 270px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding-bottom: 20px;
+      }
+      .footer-line {
+        display: flex;
+        justify-content: space-between;
+        padding-top: 15px;
+        border-top: 1px solid rgba(255, 255, 255, 0.38);
+        color: rgba(255, 255, 255, 0.8);
+      }
+      .footer-line a {
+        color: var(--lime);
+      }
+      @media (max-width: 720px) {
+        .shell {
+          width: calc(100% - 32px);
+        }
+        .hero {
+          min-height: 540px;
+        }
+        .hero-head {
+          height: 62px;
+        }
+        .hero-nav {
+          gap: 12px;
+        }
+        .hero-nav a:nth-child(2),
+        .hero-nav a:nth-child(3) {
+          display: none;
+        }
+        .hero-center {
+          min-height: 437px;
+        }
+        .intro,
+        .updates,
+        .topics,
+        .weekly,
+        .latest {
+          padding: 52px 0;
+        }
+        .intro-grid,
+        .topics-grid {
+          grid-template-columns: 1fr;
+          gap: 28px;
+        }
+        .intro-mark {
+          width: 110px;
+          aspect-ratio: 1;
+          font-size: 35px;
+        }
+        .mosaic {
+          grid-template-columns: 1fr 1fr;
+          grid-auto-rows: 185px;
+        }
+        .tile-large {
+          grid-column: span 2;
+          grid-row: span 2;
+        }
+        .tile-large h3 {
+          font-size: 21px;
+        }
+        .tile:nth-child(5) {
+          display: none;
+        }
+        .section-head {
+          align-items: start;
+          flex-direction: column;
+        }
+        .section-head p {
+          text-align: left;
+        }
+        .topic-image {
+          min-height: 240px;
+        }
+        .topic-list {
+          gap: 0 14px;
+        }
+        .weekly-grid,
+        .entry-grid {
+          grid-template-columns: 1fr;
+        }
+        .weekly-item {
+          min-height: 205px;
+        }
+        .subscribe-row {
+          display: block;
+        }
+        .subscribe-form {
+          min-width: 0;
+          width: 100%;
+          margin-top: 20px;
+        }
+        .footer,
+        .footer-inner {
+          min-height: 210px;
+        }
+        .footer-line {
+          flex-direction: column;
+          gap: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="hero" id="top">
+      <div class="shell hero-head">
+        <a class="brand" href="#top"><span class="brand-mark">SHI WU</span>事务所</a>
+        <nav class="hero-nav" aria-label="主导航">
+          <a class="active" href="#top">HOME</a><a href="#updates">DYNAMIC</a><a href="#topics">TOPICS</a
+          ><a href="#about">ABOUT</a>
+        </nav>
+      </div>
+      <div class="shell hero-center">
+        <div class="hero-stamp">SINCE<br />2026</div>
+        <h1>SHARE</h1>
+        <p>这里放着一个程序员想留下的杂事、链接、公司观察、技术想法，和偶尔很好笑的瞬间。</p>
+        <a class="button" href="#updates">浏览最近动态 <i data-lucide="arrow-down" width="15" height="15"></i></a>
+      </div>
+      <div class="shell hero-meta mono">
+        <span>PERSONAL PUBLIC NOTEBOOK</span><a href="#about">SCROLL TO EXPLORE</a>
+      </div>
+    </section>
+    <section class="intro" id="about">
+      <div class="shell intro-grid">
+        <div class="intro-mark">
+          <small>PUBLIC<br />NOTES</small><span>S<br />H<br />R</span><small>LIN XU<br />ONLINE</small>
+        </div>
+        <div>
+          <span class="overline">WHAT IS THIS</span>
+          <h2>不是作品集。<br />是一个公开的碎片本。</h2>
+          <p>
+            我叫林序，做程序员。这不是为了推销自己，而是给那些本来会散掉的想法一个稳定的去处。短帖、照片、看到的新闻、公司里的怪现象，都会在这里按自己的节奏出现。
+          </p>
+          <div class="intro-links">
+            <a class="text-link" href="#updates"
+              >看全部动态 <i data-lucide="arrow-up-right" width="14" height="14"></i></a
+            ><a class="text-link" href="#top">个人履历 <i data-lucide="user-round" width="14" height="14"></i></a>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="updates" id="updates">
+      <div class="shell">
+        <div class="section-head">
+          <div>
+            <span class="overline">RECENT FRAGMENTS</span>
+            <h2>最近留下的事</h2>
+          </div>
+          <p>首页只保留少量最新内容。想继续阅读时，再进入按日期分页的动态页。</p>
+        </div>
+        <div class="mosaic">
+          <article class="tile tile-large">
+            <img
+              src="https://images.unsplash.com/photo-1519608487953-e999c86e7454?auto=format&fit=crop&w=1100&q=88"
+              alt="夜晚山谷上空的星空"
+            />
+            <div class="tile-content">
+              <span class="tile-label">杂事 / 今天</span>
+              <h3>城市的夜晚总是在提醒我：大部分人都还没下班。</h3>
+              <span class="tile-meta">02 分钟阅读</span>
+            </div>
+          </article>
+          <article class="tile">
+            <img
+              src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=650&q=85"
+              alt="安静的办公室"
+            />
+            <div class="tile-content">
+              <span class="tile-label">公司</span>
+              <h3>当会议开始“再对齐一下”</h3>
+              <span class="tile-meta">昨天</span>
+            </div>
+          </article>
+          <article class="tile tile-plain">
+            <div class="tile-content">
+              <span class="tile-label">技术</span>
+              <h3>删掉一个 AI 功能之后，用户反而更愿意用。</h3>
+              <p class="tile-note">功能不必更多，犹豫需要更少。</p>
+              <span class="tile-meta">09.15</span>
+            </div>
+          </article>
+          <article class="tile tile-plain">
+            <div class="tile-content">
+              <span class="tile-label">好笑</span>
+              <h3>程序员的边界感：</h3>
+              <p class="tile-note">周末不回消息，但会在凌晨三点回线上事故。</p>
+              <span class="tile-meta">09.13</span>
+            </div>
+          </article>
+          <article class="tile">
+            <img
+              src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=650&q=85"
+              alt="手写的笔记"
+            />
+            <div class="tile-content">
+              <span class="tile-label">链接</span>
+              <h3>一篇关于数据和城市的好文章</h3>
+              <span class="tile-meta">09.10</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+    <section class="topics" id="topics">
+      <div class="shell topics-grid">
+        <div class="topic-image" role="img" aria-label="安静的工作空间"></div>
+        <div>
+          <span class="overline">FOLLOWING NOW</span>
+          <h2>我会反复回到<br />这些话题。</h2>
+          <div class="topic-list">
+            <article class="topic">
+              <b>01</b>
+              <h3>公司与工作</h3>
+              <p>组织如何说话，普通人怎样工作。</p>
+            </article>
+            <article class="topic">
+              <b>02</b>
+              <h3>技术与产品</h3>
+              <p>写代码，也写那些难用的东西。</p>
+            </article>
+            <article class="topic">
+              <b>03</b>
+              <h3>城市与公共议题</h3>
+              <p>正在发生的事，和我理解它的方式。</p>
+            </article>
+            <article class="topic">
+              <b>04</b>
+              <h3>人间小事</h3>
+              <p>不一定重要，但值得被记住。</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="weekly">
+      <div class="shell">
+        <div class="section-head">
+          <div>
+            <span class="overline">THIS WEEK</span>
+            <h2>本周的小合集</h2>
+          </div>
+          <p>不追求日更。把一周里仍然想分享的三件事，放进这里。</p>
+        </div>
+        <div class="weekly-grid">
+          <article class="weekly-item">
+            <span class="overline">01 / LINK</span>
+            <h3>关于“效率”最好的一个提醒</h3>
+            <p>一篇读完会让人重新看待时间管理的长文。</p>
+            <a href="#top">打开链接 <i data-lucide="arrow-up-right" width="14" height="14"></i></a>
+          </article>
+          <article class="weekly-item">
+            <span class="overline">02 / NOTE</span>
+            <h3>从一段招聘文案里看到的焦虑</h3>
+            <p>当一家公司不断强调主人翁精神时，通常是它缺少了一些东西。</p>
+            <a href="#top">阅读短帖 <i data-lucide="arrow-up-right" width="14" height="14"></i></a>
+          </article>
+          <article class="weekly-item">
+            <span class="overline">03 / PHOTO</span>
+            <h3>下班路上，云层像一张旧地图</h3>
+            <p>手机里一张舍不得删掉的照片，和当时想到的一句话。</p>
+            <a href="#top">查看照片 <i data-lucide="arrow-up-right" width="14" height="14"></i></a>
+          </article>
+        </div>
+      </div>
+    </section>
+    <section class="latest">
+      <div class="shell">
+        <div class="section-head">
+          <div>
+            <span class="overline">FROM THE ARCHIVE</span>
+            <h2>较早的动态</h2>
+          </div>
+          <a class="text-link" href="#top">进入归档 <i data-lucide="arrow-up-right" width="14" height="14"></i></a>
+        </div>
+        <div class="entry-grid">
+          <article class="entry">
+            <time>2026.09.08 / 杂事</time>
+            <h3>我现在不太相信“颠覆式创新”这四个字了。</h3>
+            <p>大部分有用的改变，发生时都没有什么戏剧性。</p>
+            <a href="#top">阅读全文 <i data-lucide="arrow-right" width="14" height="14"></i></a>
+          </article>
+          <article class="entry">
+            <time>2026.09.05 / 公司</time>
+            <h3>一段关于“责任心”的对话。</h3>
+            <p>责任常常被误用成一句不需要资源的要求。</p>
+            <a href="#top">阅读全文 <i data-lucide="arrow-right" width="14" height="14"></i></a>
+          </article>
+          <article class="entry">
+            <time>2026.09.02 / 技术</time>
+            <h3>给个人网站加了一个“之后再看”。</h3>
+            <p>比起点赞，我更在意人们愿意带走什么。</p>
+            <a href="#top">阅读全文 <i data-lucide="arrow-right" width="14" height="14"></i></a>
+          </article>
+        </div>
+      </div>
+    </section>
+    <section class="subscribe">
+      <div class="shell subscribe-row">
+        <div>
+          <h2>偶尔寄一封信。</h2>
+          <p>这一周值得留住的链接、动态和新文章。</p>
+        </div>
+        <form
+          class="subscribe-form"
+          onsubmit="
+            event.preventDefault();
+            this.querySelector('input').value = '已订阅，感谢你。';
+          "
+        >
+          <input type="email" aria-label="邮箱地址" placeholder="你的邮箱地址" required /><button type="submit">
+            订阅
+          </button>
+        </form>
+      </div>
+    </section>
+    <footer>
+      <div class="footer-overlay"></div>
+      <div class="shell footer-inner">
+        <div class="footer-line mono">
+          <span>© 2026 SHI WU / LIN XU</span><span>个人表达，不代表任何组织</span><a href="#top">BACK TO TOP ↑</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      lucide.createIcons();
+    </script>
+  </body>
+</html>
