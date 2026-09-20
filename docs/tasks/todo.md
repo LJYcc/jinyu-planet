@@ -2,15 +2,15 @@
 
 ## Phase 1：数据与公开阅读
 
-- [ ] Task 1: 数据库连接与初始迁移
+- [x] Task 1: 数据库连接与初始迁移
 - [ ] Task 2: 匿名访客会话与昵称 API
 - [ ] Task 3: 主题与帖子读取 API
 
 ## Checkpoint：数据层
 
-- [ ] 迁移和主题种子数据已在开发库验证。
+- [x] 迁移和主题种子数据已在开发库验证。
 - [ ] 匿名会话 Cookie 与公开读取接口经人工检查。
-- [ ] `npm run lint:eslint` 与 `npm run build` 通过。
+- [x] `npm run lint:eslint` 与 `npm run build` 通过。
 
 ## Phase 2：页面与发布
 

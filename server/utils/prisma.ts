@@ -27,8 +27,6 @@ function createAdapter() {
     throw new Error('DATABASE_URL must include a database name.');
   }
 
-  console.log('url', url);
-
   return new PrismaMariaDb({
     host: url.hostname,
     port: Number(url.port || 3306),
