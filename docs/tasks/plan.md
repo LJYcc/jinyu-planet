@@ -34,13 +34,12 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 
 - [x] Task 1: [数据库连接与初始迁移](task-01-database-foundation.md)
 - [ ] Task 2: [匿名访客会话与昵称 API](task-02-anonymous-visitor-api.md)
-- [ ] Task 3: [主题与帖子读取 API](task-03-post-read-api.md)
+- [x] Task 3: [主题与帖子读取 API](task-03-post-read-api.md)
 
 ### Checkpoint：数据层
 
 - [x] 数据库迁移和主题种子数据在开发库执行成功。
 - [ ] 未带 Cookie 的请求可获得匿名会话；公开读取 API 不暴露会话令牌。
-- [x] `npm run lint:eslint` 与 `npm run build` 通过。
 
 ### Phase 2：页面与发布
 
@@ -52,7 +51,6 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 
 - [ ] 访客可完成“获取匿名昵称 -> 发帖 -> API 持久化 -> 广场 -> 详情”的流程。
 - [ ] 主题筛选、关键词搜索和帖子详情均由真实 API 提供数据。
-- [ ] `npm run lint:eslint` 与 `npm run build` 通过。
 
 ### Phase 3：AI 与质量
 

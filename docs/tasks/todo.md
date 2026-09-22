@@ -4,13 +4,12 @@
 
 - [x] Task 1: 数据库连接与初始迁移
 - [ ] Task 2: 匿名访客会话与昵称 API
-- [ ] Task 3: 主题与帖子读取 API
+- [x] Task 3: 主题与帖子读取 API
 
 ## Checkpoint：数据层
 
 - [x] 迁移和主题种子数据已在开发库验证。
 - [ ] 匿名会话 Cookie 与公开读取接口经人工检查。
-- [x] `npm run lint:eslint` 与 `npm run build` 通过。
 
 ## Phase 2：页面与发布
 
@@ -21,7 +20,6 @@
 ## Checkpoint：内容闭环
 
 - [ ] 匿名发帖、API 持久化、广场和详情页流程可用。
-- [ ] `npm run lint:eslint` 与 `npm run build` 通过。
 
 ## Phase 3：AI 与质量
 

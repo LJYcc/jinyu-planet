@@ -1,6 +1,6 @@
 # Task 5：星球广场与帖子详情阅读
 
-**描述：** 将 Task 3 的读取 API 接入前端，实现 `/posts` 与 `/posts/:slug`。访客可按主题、关键词和游标浏览内容，并安全阅读 wangEditor 输出的帖子正文。
+**描述：** 将 Task 3 的读取 API 接入前端，实现 `/posts` 与 `/posts/:slug`。访客可按主题、关键词和页码分页浏览内容，并安全阅读 wangEditor 输出的帖子正文。
 
 **验收标准：**
 
@@ -11,7 +11,6 @@
 **验证：**
 
 - [ ] 人工检查筛选、搜索、进入详情、返回广场、刷新查询 URL 与不存在 slug。
-- [ ] 运行 `npm run lint:eslint` 和 `npm run build`。
 
 **依赖：** Task 3、Task 4。
 

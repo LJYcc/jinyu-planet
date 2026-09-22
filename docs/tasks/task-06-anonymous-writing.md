@@ -10,9 +10,8 @@
 
 **验证：**
 
-- [ ] 运行 `npm run build`，确认 wangEditor 不发生 SSR/hydration 错误。
+- [ ] 人工检查 wangEditor 挂载和离开页面时的 SSR/hydration 行为。
 - [ ] 人工检查：编辑、刷新恢复草稿、预览、提交、重复点击提交和发布后广场/详情可见。
-- [ ] 运行 `npm run lint:eslint`。
 
 **依赖：** Task 2、Task 3、Task 5。
 

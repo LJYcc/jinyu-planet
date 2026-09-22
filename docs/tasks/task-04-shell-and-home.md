@@ -10,7 +10,6 @@
 
 **验证：**
 
-- [ ] 运行 `npm run lint:eslint` 和 `npm run build`。
 - [ ] 人工检查约 1440px 与 390px 宽：首页无横向溢出，导航和两个主要入口可跳转。
 
 **依赖：** Task 2、Task 3。

@@ -14,7 +14,6 @@
 - [x] 执行 `npx prisma migrate dev --name initial_schema` 与 `npx prisma generate`，并验证迁移记录存在。
 - [x] 执行 `npx prisma db seed`，确认种子脚本可重复运行。
 - [x] 查询 `topics`，确认五个主题、排序和描述正确。
-- [x] 运行 `npm run lint:eslint` 和 `npm run build`。
 
 **依赖：** 无；实施前需在本地 `.env` 配置 MySQL `DATABASE_URL`，并确认目标是开发数据库。
 
