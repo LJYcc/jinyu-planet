@@ -43,7 +43,7 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 
 ### Phase 2：页面与发布
 
-- [ ] Task 4: [公共壳层与金鱼星球首页](task-04-shell-and-home.md)
+- [x] Task 4: [公共壳层与金鱼星球首页](task-04-shell-and-home.md)
 - [ ] Task 5: [星球广场与帖子详情阅读](task-05-post-discovery.md)
 - [ ] Task 6: [wangEditor 匿名发帖闭环](task-06-anonymous-writing.md)
 

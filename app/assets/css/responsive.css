@@ -1,0 +1,6 @@
+/* Shared responsive container sizing. Component and page breakpoints stay local. */
+@media (max-width: 820px) {
+  .shell-container {
+    width: min(var(--container), calc(100% - 32px));
+  }
+}

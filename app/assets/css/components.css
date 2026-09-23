@@ -1,0 +1,23 @@
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.text-link span {
+  color: var(--accent-deep);
+  transition: transform 0.2s;
+}
+
+.text-link:hover span {
+  transform: translateX(4px);
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
