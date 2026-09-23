@@ -1,0 +1,33 @@
+:root {
+  --ink: #171b1b;
+  --muted: #6d7471;
+  --line: #dfe4df;
+  --paper: #f5f6f2;
+  --night: #101b1d;
+  --night-soft: #1c2b2b;
+  --accent: #e5c75f;
+  --accent-deep: #c7a840;
+  --container: 1180px;
+  /* Element Plus theme: keep component tokens with the shared design tokens. */
+  --el-color-primary-rgb: 199, 168, 64 !important;
+  --el-color-primary: #c7a840 !important;
+  --el-color-primary-light-3: #d9c274 !important;
+  --el-color-primary-light-5: #e5d49c !important;
+  --el-color-primary-light-7: #efe6c5 !important;
+  --el-color-primary-light-8: #f4edda !important;
+  --el-color-primary-light-9: #faf7ed !important;
+  --el-color-primary-dark-2: #9f842c !important;
+  --el-color-warning-rgb: 201, 159, 66 !important;
+  --el-color-warning: #c99f42 !important;
+  --el-color-warning-light-3: #dabe79 !important;
+  --el-color-warning-light-5: #e6d19e !important;
+  --el-color-warning-light-7: #f0e5c4 !important;
+  --el-color-warning-light-8: #f5edda !important;
+  --el-color-warning-light-9: #fbf8ee !important;
+  --el-color-warning-dark-2: #a77f2e !important;
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}

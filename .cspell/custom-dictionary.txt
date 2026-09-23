@@ -1,1 +1,6 @@
 commitlint
+Noto
+nowrap
+Nuxt
+nuxtjs
+rgba

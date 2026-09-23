@@ -1,0 +1,145 @@
+generator client {
+  // 根据本文件的 model 生成带类型提示的 Prisma Client。
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma 7 的连接 URL 配置在项目根目录的 prisma.config.ts，而不是这里。
+  provider = "mysql"
+}
+
+enum VisitorStatus {
+  active
+  blocked
+}
+
+enum PostType {
+  article
+  short
+  photo
+  link
+}
+
+enum PostStatus {
+  pending
+  published
+  hidden
+}
+
+// 不登录的访问者也需要稳定身份，供发帖归属和会话校验使用。
+model AnonymousVisitor {
+  id         String           @id @default(uuid()) @db.Char(36)
+  nickname   String           @db.VarChar(64)
+  status     VisitorStatus    @default(active)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  lastSeenAt DateTime         @default(now()) @map("last_seen_at")
+  sessions   VisitorSession[]
+  posts      Post[]
+
+  @@map("anonymous_visitors")
+}
+
+model VisitorSession {
+  id         String            @id @default(uuid()) @db.Char(36)
+  visitorId  String            @map("visitor_id") @db.Char(36)
+  // 数据库只保存 token 的哈希值，原始 token 未来只保存在 HttpOnly Cookie 中。
+  tokenHash  String            @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime          @map("expires_at")
+  revokedAt  DateTime?         @map("revoked_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  lastSeenAt DateTime          @default(now()) @map("last_seen_at")
+  visitor    AnonymousVisitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([visitorId, expiresAt])
+  @@map("visitor_sessions")
+}
+
+// 网站内置主题；seed 脚本会写入首批主题数据。
+model Topic {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique @db.VarChar(48)
+  name        String   @unique @db.VarChar(32)
+  description String   @db.VarChar(160)
+  colorKey    String   @default("lime") @map("color_key") @db.VarChar(24)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  posts       Post[]
+
+  @@index([isActive, sortOrder])
+  @@map("topics")
+}
+
+model Post {
+  id             String            @id @default(uuid()) @db.Char(36)
+  slug           String            @unique @db.VarChar(120)
+  visitorId      String            @map("visitor_id") @db.Char(36)
+  topicId        Int               @map("topic_id")
+  type           PostType
+  status         PostStatus        @default(published)
+  title          String?           @db.VarChar(160)
+  excerpt        String            @db.VarChar(320)
+  contentHtml    String            @map("content_html") @db.LongText
+  contentText    String            @map("content_text") @db.LongText
+  externalUrl    String?           @map("external_url") @db.VarChar(2048)
+  coverImageId   String?           @map("cover_image_id") @db.Char(36)
+  readingMinutes Int               @default(1) @map("reading_minutes")
+  clientNonce    String            @map("client_nonce") @db.Char(36)
+  publishedAt    DateTime          @default(now()) @map("published_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  visitor        AnonymousVisitor  @relation(fields: [visitorId], references: [id], onDelete: Restrict)
+  topic          Topic             @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  coverImage     PostImage?        @relation("PostCoverImage", fields: [coverImageId], references: [id], onDelete: SetNull)
+  images         PostImage[]       @relation("PostBodyImages")
+  tagLinks       PostTagLink[]
+
+  // 同一访客的一次提交使用同一个 nonce，避免重复点击或网络重试产生重复帖子。
+  @@unique([visitorId, clientNonce])
+  @@index([status, publishedAt])
+  @@index([topicId, status, publishedAt])
+  @@index([visitorId, createdAt])
+  @@map("posts")
+}
+
+model Tag {
+  id        Int           @id @default(autoincrement())
+  slug      String        @unique @db.VarChar(48)
+  name      String        @unique @db.VarChar(32)
+  createdAt DateTime      @default(now()) @map("created_at")
+  postLinks PostTagLink[]
+
+  @@map("tags")
+}
+
+// 帖子与标签的多对多关系表。
+model PostTagLink {
+  postId String @map("post_id") @db.Char(36)
+  tagId  Int    @map("tag_id")
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Restrict)
+
+  // 复合主键确保同一个标签不会重复挂到同一篇帖子。
+  @@id([postId, tagId])
+  @@map("post_tag_links")
+}
+
+// 图片文件存放在对象存储，数据库只保存地址、尺寸和排序等元数据。
+model PostImage {
+  id           String   @id @default(uuid()) @db.Char(36)
+  postId       String   @map("post_id") @db.Char(36)
+  storageKey   String   @unique @map("storage_key") @db.VarChar(512)
+  publicUrl    String   @map("public_url") @db.VarChar(2048)
+  altText      String   @map("alt_text") @db.VarChar(300)
+  caption      String?  @db.VarChar(500)
+  width        Int?
+  height       Int?
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  post         Post     @relation("PostBodyImages", fields: [postId], references: [id], onDelete: Cascade)
+  coverForPost Post[]   @relation("PostCoverImage")
+
+  @@index([postId, sortOrder])
+  @@map("post_images")
+}
