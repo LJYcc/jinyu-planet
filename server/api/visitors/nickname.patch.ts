@@ -1,6 +1,8 @@
-import { createError, defineEventHandler, readBody } from 'h3';
-import { findValidVisitorSession, toPublicVisitor, updateVisitorNickname } from '../../repositories/visitorRepository';
-import { createNickname, getSessionToken, hashSessionToken } from '../../utils/visitorSession';
+import { toPublicVisitor, updateVisitorNickname } from '../../repositories/visitorRepository';
+import { apiError, apiSuccess, defineApiHandler } from '../../utils/apiResponse';
+import { getVisitorSession } from '../../utils/auth';
+import { readJsonBody } from '../../utils/requestValidation';
+import { createNickname } from '../../utils/visitorSession';
 
 type NicknameBody = { nickname?: unknown };
 
@@ -8,7 +10,7 @@ function validateNickname(value: unknown) {
   // 不传 nickname 时代表“换一个系统生成的昵称”。
   if (value === undefined) return createNickname();
   if (typeof value !== 'string') {
-    throw createError({ statusCode: 400, statusMessage: 'nickname must be a string.' });
+    apiError(400, 'INVALID_NICKNAME', 'nickname must be a string.');
   }
 
   const nickname = value.trim();
@@ -18,30 +20,15 @@ function validateNickname(value: unknown) {
     return codePoint < 32 || codePoint === 127;
   });
   if (!nickname || nickname.length > 64 || containsControlCharacter) {
-    throw createError({ statusCode: 400, statusMessage: 'nickname must be 1 to 64 safe characters.' });
+    apiError(400, 'INVALID_NICKNAME', 'nickname must be 1 to 64 safe characters.');
   }
   return nickname;
 }
 
-export default defineEventHandler(async event => {
+export default defineApiHandler(async event => {
   // 换昵称同样必须先从 HttpOnly Cookie 恢复当前访客，不能相信客户端传来的 ID。
-  const token = getSessionToken(event);
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Visitor session is required.' });
-  }
-
-  const session = await findValidVisitorSession(hashSessionToken(token));
-  if (!session) {
-    throw createError({ statusCode: 401, statusMessage: 'Visitor session is invalid or expired.' });
-  }
-
-  let body: NicknameBody;
-  try {
-    // readBody 会解析 JSON 请求体；格式错误时转成明确的 400 响应。
-    body = (await readBody<NicknameBody>(event)) ?? {};
-  } catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid request body.' });
-  }
+  const session = getVisitorSession(event);
+  const body = await readJsonBody<NicknameBody>(event);
 
   let nickname = validateNickname(body.nickname);
   if (nickname === session.visitor.nickname && body.nickname === undefined) {
@@ -52,6 +39,6 @@ export default defineEventHandler(async event => {
   }
 
   const visitor = await updateVisitorNickname(session.visitor.id, nickname);
-  // 已发布帖子的作者快照不在这里修改；这里只更新访客当前昵称。
-  return { visitor: toPublicVisitor(visitor) };
+  // 帖子通过 visitorId 关联当前访客，因此历史和后续帖子都会展示这个新昵称。
+  return apiSuccess(toPublicVisitor(visitor));
 });

@@ -7,10 +7,20 @@ useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任�
     <p class="eyebrow">GOLDFISH PLANET / AI CHAT</p>
     <h1 class="mb-[18px] text-[clamp(42px,8vw,78px)] font-medium">AI 助理</h1>
     <p class="mb-8 max-w-[500px] text-[var(--muted)] leading-[1.9]">
-      通用 AI 对话空间将在后续任务接入。请勿在对话中输入密码、身份证号等敏感信息。
+      AI 对话功能暂未开放，之后会在这里和你聊聊想法。请勿输入密码、身份证号等敏感信息。
     </p>
-    <NuxtLink to="/" custom v-slot="{ navigate }">
-      <ElButton type="primary" size="large" @click="navigate">返回首页 <span aria-hidden="true">↗</span></ElButton>
-    </NuxtLink>
+    <nuxt-link
+      v-slot="{ navigate }"
+      to="/"
+      custom
+    >
+      <el-button
+        type="primary"
+        size="large"
+        class="arrow-hover"
+        @click="navigate"
+        >返回首页 <span aria-hidden="true">↗</span></el-button
+      >
+    </nuxt-link>
   </section>
 </template>

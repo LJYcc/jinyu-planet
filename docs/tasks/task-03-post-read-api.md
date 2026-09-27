@@ -1,6 +1,6 @@
 # Task 3：主题与帖子读取 API
 
-**描述：** 建立公开内容读取契约：主题列表、帖子分页列表和帖子详情。Prisma repository 只返回 `published` 内容，支持主题筛选和关键词搜索，并将数据库行转换为稳定的前端 DTO。
+**描述：** 建立公开内容读取契约：主题列表、帖子分页列表和帖子详情。Prisma repository 只返回 `published` 内容，支持主题筛选和关键词搜索，并将数据库行转换为稳定的前端 DTO。成功响应统一使用 `{ success: true, data, metadata? }`，分页信息放在 `metadata`；失败响应使用稳定错误代码和匹配 HTTP 状态码。
 
 **验收标准：**
 
@@ -21,6 +21,8 @@
 - `server/api/posts/index.get.ts`
 - `server/api/posts/[slug].get.ts`
 - `server/repositories/postRepository.ts`
+- `server/utils/apiResponse.ts`
 - `app/types/post.ts`
+- `app/types/api.ts`
 
 **预计范围：** 中等，5 个文件。

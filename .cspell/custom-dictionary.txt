@@ -1,6 +1,10 @@
 commitlint
+noopener
+noreferrer
 Noto
 nowrap
 Nuxt
 nuxtjs
 rgba
+rowspan
+wangeditor

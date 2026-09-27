@@ -8,7 +8,11 @@
 
 ## 架构决策
 
+- 首页精选使用帖子上的人工精选标记和排序字段，只读取已发布帖子；精选不足 4 条时由最新公开帖子补齐，匿名访客没有修改该配置的接口。
+
 - 使用 Nuxt server routes 作为浏览器唯一 API 边界；Prisma 是 schema、migration 和数据库访问的唯一 ORM，数据库客户端封装在 `server/`，不进入客户端 bundle。
+- 服务端 API 使用统一的成功/失败 JSON 契约：成功返回 `success`、`data` 与可选 `metadata`，失败返回 `success`、稳定错误 `code` 和 `message`，并保留 HTTP 状态码。
+- 受保护路由通过 Nitro server middleware 唯一负责匿名会话校验并写入请求上下文，业务路由只读取认证上下文；参数读取、领域验证和权限断言分别位于独立工具层。公开读取接口不经身份校验，为后续 Bearer Token、角色与资源权限接入保留边界。
 - 匿名会话用随机令牌的 HttpOnly Cookie 加服务端哈希存储实现，不引入注册或登录。
 - 帖子正文保存为消毒后的 wangEditor HTML，同时派生纯文本、摘要和阅读时长；列表/详情都从 API 读取。
 - 图片上传和千问 API 需独立服务端接口，但分别在对应功能接入时实施。
@@ -33,24 +37,24 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 ### Phase 1：数据与公开阅读
 
 - [x] Task 1: [数据库连接与初始迁移](task-01-database-foundation.md)
-- [ ] Task 2: [匿名访客会话与昵称 API](task-02-anonymous-visitor-api.md)
+- [x] Task 2: [匿名访客会话与昵称 API](task-02-anonymous-visitor-api.md)
 - [x] Task 3: [主题与帖子读取 API](task-03-post-read-api.md)
 
 ### Checkpoint：数据层
 
 - [x] 数据库迁移和主题种子数据在开发库执行成功。
-- [ ] 未带 Cookie 的请求可获得匿名会话；公开读取 API 不暴露会话令牌。
+- [x] 未带 Cookie 的请求可获得匿名会话；公开读取 API 不暴露会话令牌。
 
 ### Phase 2：页面与发布
 
 - [x] Task 4: [公共壳层与金鱼星球首页](task-04-shell-and-home.md)
-- [ ] Task 5: [星球广场与帖子详情阅读](task-05-post-discovery.md)
-- [ ] Task 6: [wangEditor 匿名发帖闭环](task-06-anonymous-writing.md)
+- [x] Task 5: [星球广场与帖子详情阅读](task-05-post-discovery.md)
+- [x] Task 6: [wangEditor 匿名发帖闭环](task-06-anonymous-writing.md)
 
 ### Checkpoint：内容闭环
 
-- [ ] 访客可完成“获取匿名昵称 -> 发帖 -> API 持久化 -> 广场 -> 详情”的流程。
-- [ ] 主题筛选、关键词搜索和帖子详情均由真实 API 提供数据。
+- [x] 访客可完成“获取匿名昵称 -> 发帖 -> API 持久化 -> 广场 -> 详情”的流程。
+- [x] 主题筛选、关键词搜索和帖子详情均由真实 API 提供数据。
 
 ### Phase 3：AI 与质量
 

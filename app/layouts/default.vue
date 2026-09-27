@@ -1,17 +1,35 @@
 <template>
   <div class="site-shell">
-    <SiteHeader />
-    <main id="main-content" class="site-main min-h-[60vh]" tabindex="-1">
+    <site-header />
+    <main
+      id="main-content"
+      class="site-main min-h-[60vh]"
+      tabindex="-1"
+    >
       <slot />
     </main>
-    <SiteFooter />
-    <NuxtLink to="/ai-chat" custom v-slot="{ navigate }">
-      <ElButton class="ai-assistant" type="warning" round aria-label="打开 AI 助理" @click="navigate">
-        <span class="ai-assistant__icon" aria-hidden="true">✦</span>
+    <site-footer />
+    <nuxt-link
+      v-slot="{ navigate }"
+      to="/ai-chat"
+      custom
+    >
+      <el-button
+        class="ai-assistant"
+        type="warning"
+        round
+        aria-label="打开 AI 助理"
+        @click="navigate"
+      >
+        <span
+          class="ai-assistant__icon"
+          aria-hidden="true"
+          >✦</span
+        >
         <span class="ai-assistant__label">AI 助理</span>
         <span class="sr-only">和 AI 聊聊</span>
-      </ElButton>
-    </NuxtLink>
+      </el-button>
+    </nuxt-link>
   </div>
 </template>
 

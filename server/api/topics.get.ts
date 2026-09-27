@@ -1,4 +1,4 @@
-import { defineEventHandler } from 'h3';
 import { listTopics } from '../repositories/postRepository';
+import { apiSuccess, defineApiHandler } from '../utils/apiResponse';
 
-export default defineEventHandler(async () => ({ topics: await listTopics() }));
+export default defineApiHandler(async () => apiSuccess(await listTopics()));

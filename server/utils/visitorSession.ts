@@ -1,3 +1,9 @@
+/**
+ * 匿名访客会话工具。
+ *
+ * 负责生成和哈希会话 token、生成访客昵称，以及读写 HttpOnly Cookie；
+ * 数据库中的会话查询和更新由 visitorRepository 负责。
+ */
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { H3Event } from 'h3';
 import { getCookie, setCookie } from 'h3';
@@ -28,16 +34,19 @@ const nicknameNouns = [
   '\u661f\u5c18'
 ];
 
+/** 生成不可预测的匿名会话原始 token。 */
 export function createSessionToken() {
   // randomBytes 生成不可预测的随机值，不能使用 Math.random 代替。
   return randomBytes(32).toString('base64url');
 }
 
+/** 对会话 token 做 SHA-256 哈希，用于数据库查询和存储。 */
 export function hashSessionToken(token: string) {
   // 令牌哈希可以用于查库，即使数据库泄露也不会直接得到 Cookie 内容。
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** 生成用于展示的随机中文匿名昵称。 */
 export function createNickname() {
   // randomInt 避免手写随机算法的偏差，并保证数组下标始终合法。
   const adjective = nicknameAdjectives[randomInt(nicknameAdjectives.length)];
@@ -46,12 +55,14 @@ export function createNickname() {
   return `${adjective}${noun}${suffix}`;
 }
 
+/** 从请求 Cookie 读取并限制长度后的原始会话 token。 */
 export function getSessionToken(event: H3Event) {
   const token = getCookie(event, VISITOR_SESSION_COOKIE);
   // 限制长度是一个廉价的输入保护，异常长的 Cookie 不参与数据库查询。
   return token && token.length <= 256 ? token : undefined;
 }
 
+/** 将原始会话 token 以安全的 HttpOnly Cookie 写回浏览器。 */
 export function setSessionTokenToCookie(event: H3Event, token: string) {
   setCookie(event, VISITOR_SESSION_COOKIE, token, {
     // HttpOnly 让浏览器脚本无法读取令牌，降低 XSS 窃取会话的风险。

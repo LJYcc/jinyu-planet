@@ -1,4 +1,11 @@
-import type { PostStatus } from '@prisma/client';
+/**
+ * 帖子和主题数据仓储。
+ *
+ * 集中处理公开内容筛选、精选排序、帖子创建和详情推荐查询，
+ * 并通过显式 select 与 DTO 映射控制返回字段范围。
+ */
+import { createHash } from 'node:crypto';
+import type { PostStatus, PostType } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 
 // 所有公开读取接口都在 repository 边界统一限制状态，避免接口忘记过滤
@@ -9,10 +16,33 @@ const RECOMMENDATION_LIMIT = 3;
 export type PostListQuery = {
   topic?: string;
   query?: string;
+  sort?: 'latest' | 'featured';
   page: number;
   pageSize: number;
 };
 
+export type PostCreation = {
+  visitorId: string;
+  topicId: number;
+  type: PostType;
+  title: string | null;
+  contentHtml: string;
+  contentText: string;
+  excerpt: string;
+  externalUrl: string | null;
+  tags: string[];
+  clientNonce: string;
+  readingMinutes: number;
+  slug: string;
+};
+
+/** 根据标签名称生成稳定且不依赖中文转写规则的标签 slug。 */
+function createTagSlug(name: string) {
+  // 标签名可以是中文；使用稳定哈希作为 URL 标识，避免手写中文转写规则。
+  return `tag-${createHash('sha256').update(name).digest('hex').slice(0, 32)}`;
+}
+
+/** 将数据库图片元数据转换为公开图片 DTO。 */
 function publicImage(image: {
   publicUrl: string;
   altText: string;
@@ -30,6 +60,7 @@ function publicImage(image: {
   };
 }
 
+/** 将帖子查询结果转换为列表和相关推荐共用的公开 DTO。 */
 function publicPost(post: {
   slug: string;
   type: 'article' | 'short' | 'photo' | 'link';
@@ -61,6 +92,7 @@ function publicPost(post: {
   };
 }
 
+/** 根据主题和关键词构造只允许读取公开帖子的 Prisma 条件。 */
 function postWhere(query: PostListQuery) {
   const search = query.query?.trim();
   const filters = [];
@@ -75,6 +107,7 @@ function postWhere(query: PostListQuery) {
 
   return {
     status: PUBLIC_STATUS,
+    ...(query.sort === 'featured' ? { isFeatured: true } : {}),
     ...(query.topic ? { topic: { slug: query.topic, isActive: true } } : {}),
     ...(filters.length ? { AND: filters } : {})
   };
@@ -97,13 +130,17 @@ const listSelect = {
   }
 } as const;
 
+/** 按时间分页读取公开帖子，并返回分页元数据。 */
 export async function listPublishedPosts(query: PostListQuery) {
   const where = postWhere(query);
   const [total, posts] = await prisma.$transaction([
     prisma.post.count({ where }),
     prisma.post.findMany({
       where,
-      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+      orderBy:
+        query.sort === 'featured'
+          ? [{ featuredRank: 'asc' }, { publishedAt: 'desc' }, { id: 'desc' }]
+          : [{ publishedAt: 'desc' }, { id: 'desc' }],
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
       select: listSelect
@@ -121,6 +158,31 @@ export async function listPublishedPosts(query: PostListQuery) {
   };
 }
 
+/** 按人工精选排序读取首页帖子，不足数量时用最新公开帖子补齐。 */
+export async function listHomeFeaturedPosts(limit = 4) {
+  const featuredPosts = await prisma.post.findMany({
+    where: { status: PUBLIC_STATUS, isFeatured: true },
+    orderBy: [{ featuredRank: 'asc' }, { publishedAt: 'desc' }, { id: 'desc' }],
+    take: limit,
+    select: listSelect
+  });
+
+  if (featuredPosts.length === limit) return featuredPosts.map(publicPost);
+
+  const fallbackPosts = await prisma.post.findMany({
+    where: {
+      status: PUBLIC_STATUS,
+      ...(featuredPosts.length ? { id: { notIn: featuredPosts.map(post => post.id) } } : {})
+    },
+    orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+    take: limit - featuredPosts.length,
+    select: listSelect
+  });
+
+  return [...featuredPosts, ...fallbackPosts].map(publicPost);
+}
+
+/** 读取启用中的主题，并按后台配置的展示顺序返回。 */
 export async function listTopics() {
   // 前端只需要启用中的主题，并按照后台配置的展示顺序返回。
   return prisma.topic.findMany({
@@ -130,6 +192,46 @@ export async function listTopics() {
   });
 }
 
+/** 根据 slug 查找可用于发帖的启用主题。 */
+export async function findActiveTopicBySlug(slug: string) {
+  return prisma.topic.findFirst({ where: { slug, isActive: true }, select: { id: true } });
+}
+
+/** 查询访客和 client nonce 的组合，支持发帖请求幂等。 */
+export async function findPostByVisitorAndNonce(visitorId: string, clientNonce: string) {
+  return prisma.post.findUnique({
+    where: { visitorId_clientNonce: { visitorId, clientNonce } },
+    select: { slug: true }
+  });
+}
+
+/** 创建已发布帖子及其标签关联，并返回公开详情 slug。 */
+export async function createPublishedPost(input: PostCreation) {
+  return prisma.post.create({
+    data: {
+      visitorId: input.visitorId,
+      topicId: input.topicId,
+      type: input.type,
+      status: 'published',
+      title: input.title,
+      contentHtml: input.contentHtml,
+      contentText: input.contentText,
+      excerpt: input.excerpt,
+      externalUrl: input.externalUrl,
+      clientNonce: input.clientNonce,
+      readingMinutes: input.readingMinutes,
+      slug: input.slug,
+      tagLinks: {
+        create: input.tags.map(name => ({
+          tag: { connectOrCreate: { where: { name }, create: { name, slug: createTagSlug(name) } } }
+        }))
+      }
+    },
+    select: { slug: true }
+  });
+}
+
+/** 读取公开帖子详情、正文图片、标签和同主题相关推荐。 */
 export async function findPublishedPostBySlug(slug: string) {
   // 详情接口是唯一需要读取完整正文、标签和图片元数据的读取路径。
   const post = await prisma.post.findFirst({

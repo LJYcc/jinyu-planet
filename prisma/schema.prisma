@@ -78,6 +78,8 @@ model Post {
   topicId        Int               @map("topic_id")
   type           PostType
   status         PostStatus        @default(published)
+  isFeatured     Boolean           @default(false) @map("is_featured")
+  featuredRank   Int               @default(0) @map("featured_rank")
   title          String?           @db.VarChar(160)
   excerpt        String            @db.VarChar(320)
   contentHtml    String            @map("content_html") @db.LongText
@@ -98,6 +100,7 @@ model Post {
   // 同一访客的一次提交使用同一个 nonce，避免重复点击或网络重试产生重复帖子。
   @@unique([visitorId, clientNonce])
   @@index([status, publishedAt])
+  @@index([status, isFeatured, featuredRank, publishedAt])
   @@index([topicId, status, publishedAt])
   @@index([visitorId, createdAt])
   @@map("posts")

@@ -1,3 +1,9 @@
+/**
+ * Prisma 数据库客户端入口。
+ *
+ * 负责校验 MySQL 连接配置、创建 MariaDB driver adapter，并在开发热更新
+ * 场景复用全局 PrismaClient，避免重复创建数据库连接。
+ */
 import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
@@ -6,6 +12,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
 };
 
+/** 根据 DATABASE_URL 创建 Prisma 7 所需的 MariaDB adapter。 */
 function createAdapter() {
   // Prisma 7 直连 MySQL 时必须显式提供 driver adapter。
   const databaseUrl = process.env.DATABASE_URL;

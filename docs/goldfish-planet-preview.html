@@ -1,9 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <!-- 早期静态原型：当前广场 UI 以 docs/需求文档.md 第 7.1 节和 app/pages/posts/index.vue 为准。 -->
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="金鱼星球，一个可以阅读、写作和聊天的小小数字星球。" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <meta
+      name="description"
+      content="金鱼星球，一个可以阅读、写作和聊天的小小数字星球。"
+    />
     <title>金鱼星球 | Goldfish Planet</title>
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
     <style>
@@ -1325,8 +1332,17 @@
   </head>
   <body>
     <main id="app"></main>
-    <a class="ai-fab" href="#/ai-chat" aria-label="打开 AI 助理" title="和 AI 聊聊"
-      ><i data-lucide="sparkles" width="17" height="17"></i><span>AI 助理</span></a
+    <a
+      class="ai-fab"
+      href="#/ai-chat"
+      aria-label="打开 AI 助理"
+      title="和 AI 聊聊"
+      ><i
+        data-lucide="sparkles"
+        width="17"
+        height="17"
+      ></i
+      ><span>AI 助理</span></a
     >
 
     <script>
@@ -1543,7 +1559,7 @@
       }
 
       function renderWrite() {
-        app.innerHTML = `${pageHeader('投递新信号', '不需要注册。用系统给你的昵称，留下此刻想被好好接住的一段话。', '/write')}<section class="surface"><div class="shell page-section"><div class="write-layout"><form id="write-form" class="editor-card"><div class="field"><label for="post-type">信号类型</label><select id="post-type"><option>长文</option><option>短帖</option><option>图文</option><option>链接分享</option></select></div><div class="field"><label for="post-topic">星球主题</label><select id="post-topic">${['生活碎片', '技术与产品', '城市观察', '脑内宇宙', '好东西分享'].map(topic => `<option>${topic}</option>`).join('')}</select></div><div class="field"><label for="post-title">标题 <span class="mono" style="color:var(--muted)">短帖可不填</span></label><input id="post-title" maxlength="80" placeholder="给这条信号一个名字" /></div><div class="field"><label>正文</label><div class="editor-tools" aria-label="富文本工具栏"><button type="button" data-command="bold" title="加粗"><b>B</b></button><button type="button" data-command="italic" title="斜体"><i>I</i></button><button type="button" data-command="strikeThrough" title="删除线"><s>S</s></button><button type="button" data-command="formatBlock" data-value="h2" title="二级标题">H2</button><button type="button" data-command="insertUnorderedList" title="无序列表"><i data-lucide="list" width="16" height="16"></i></button><button type="button" data-command="insertOrderedList" title="有序列表"><i data-lucide="list-ordered" width="16" height="16"></i></button><button type="button" data-command="formatBlock" data-value="blockquote" title="引用"><i data-lucide="quote" width="16" height="16"></i></button><button type="button" id="add-link" title="插入链接"><i data-lucide="link" width="16" height="16"></i></button></div><div id="rich-editor" class="rich-editor" contenteditable="true" data-placeholder="从这里开始写。一个念头、一段观察，或者一个想分享的链接。"></div></div><div class="write-actions"><button type="button" id="preview-button" class="button ghost">预览</button><button type="submit" class="button dark"><i data-lucide="send" width="15" height="15"></i>投递到金鱼星球</button></div><div id="preview-panel" class="preview-panel"></div></form><aside><div class="identity-card"><span class="eyebrow">YOUR TEMPORARY IDENTITY</span><h2>你正在使用这个昵称</h2><div id="identity-name" class="identity-name">${getNickname()}</div><p>昵称只保存在当前浏览器。换一个昵称不会修改以前发出的内容。</p><button id="change-nickname" class="button small ghost">换一个昵称 <i data-lucide="refresh-cw" width="14" height="14"></i></button></div><div class="notice"><strong>投递前请确认</strong><br />请不要发布密码、身份证号、精确地址等个人隐私，也不要发布攻击性或违法内容。正式接入数据服务时，站点会加入发布频率与内容状态管理。</div></aside></div></div></section>${footer()}`;
+        app.innerHTML = `${pageHeader('投递新信号', '不需要注册。用系统给你的昵称，留下此刻想被好好接住的一段话。', '/write')}<section class="surface"><div class="shell page-section"><div class="write-layout"><form id="write-form" class="editor-card"><div class="field"><label for="post-type">信号类型</label><select id="post-type"><option>长文</option><option>短帖</option><option>图文</option><option>链接分享</option></select></div><div class="field"><label for="post-topic">星球主题</label><select id="post-topic">${['生活碎片', '技术与产品', '城市观察', '脑内宇宙', '好东西分享'].map(topic => `<option>${topic}</option>`).join('')}</select></div><div class="field"><label for="post-title">标题 <span class="mono" style="color:var(--muted)">长文和链接必填，短帖不保存标题</span></label><input id="post-title" maxlength="160" placeholder="长文写标题；图文可选；链接写链接标题" /></div><div class="field"><label>正文 / 说明</label><div class="editor-tools" aria-label="富文本工具栏"><button type="button" data-command="bold" title="加粗"><b>B</b></button><button type="button" data-command="italic" title="斜体"><i>I</i></button><button type="button" data-command="strikeThrough" title="删除线"><s>S</s></button><button type="button" data-command="formatBlock" data-value="h2" title="二级标题">H2</button><button type="button" data-command="insertUnorderedList" title="无序列表"><i data-lucide="list" width="16" height="16"></i></button><button type="button" data-command="insertOrderedList" title="有序列表"><i data-lucide="list-ordered" width="16" height="16"></i></button><button type="button" data-command="formatBlock" data-value="blockquote" title="引用"><i data-lucide="quote" width="16" height="16"></i></button><button type="button" id="add-link" title="插入链接"><i data-lucide="link" width="16" height="16"></i></button></div><div id="rich-editor" class="rich-editor" contenteditable="true" data-placeholder="短帖直接写内容；图文写说明；链接分享可以补充推荐语。"></div></div><div class="write-actions"><button type="button" id="preview-button" class="button ghost">预览</button><button type="submit" class="button dark"><i data-lucide="send" width="15" height="15"></i>投递到金鱼星球</button></div><div id="preview-panel" class="preview-panel"></div></form><aside><div class="identity-card"><span class="eyebrow">YOUR TEMPORARY IDENTITY</span><h2>你正在使用这个昵称</h2><div id="identity-name" class="identity-name">${getNickname()}</div><p>昵称只保存在当前浏览器。换一个昵称后，历史和之后的公开信号都会展示新昵称。</p><button id="change-nickname" class="button small ghost">换一个昵称 <i data-lucide="refresh-cw" width="14" height="14"></i></button></div><div class="notice"><strong>投递前请确认</strong><br />请不要发布密码、身份证号、精确地址等个人隐私，也不要发布攻击性或违法内容。正式接入数据服务时，站点会加入发布频率与内容状态管理。</div></aside></div></div></section>${footer()}`;
         const editor = document.getElementById('rich-editor');
         const draft = safeGet('goldfish-draft', null);
         if (draft) {

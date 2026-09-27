@@ -1,4 +1,3 @@
-import { createError, defineEventHandler } from 'h3';
 import {
   createVisitorSession,
   findValidVisitorSession,
@@ -14,8 +13,9 @@ import {
   VISITOR_SESSION_RENEWAL_THRESHOLD_SECONDS,
   VISITOR_SESSION_TTL_SECONDS
 } from '../../utils/visitorSession';
+import { apiError, apiSuccess, defineApiHandler } from '../../utils/apiResponse';
 
-export default defineEventHandler(async event => {
+export default defineApiHandler(async event => {
   // bootstrap 是前端进入站点时调用的入口：有有效 Cookie 就恢复，没有就创建。
   const currentToken = getSessionToken(event);
   const now = new Date();
@@ -32,7 +32,7 @@ export default defineEventHandler(async event => {
       // 每次恢复会话都会记录活跃时间；只有接近过期时才同步续期数据库会话和浏览器 Cookie。
       await touchVisitorSession(session.id, session.visitor.id, now, renewedExpiresAt);
       if (shouldRenew) setSessionTokenToCookie(event, currentToken);
-      return { visitor: toPublicVisitor(session.visitor) };
+      return apiSuccess(toPublicVisitor(session.visitor));
     }
   }
 
@@ -46,10 +46,10 @@ export default defineEventHandler(async event => {
 
   if (!visitor.visitor || !visitor.session) {
     // 这是防御性检查，正常情况下事务返回的两个对象一定存在。
-    throw createError({ statusCode: 500, statusMessage: 'Unable to create visitor session.' });
+    apiError(500, 'VISITOR_SESSION_CREATION_FAILED', 'Unable to create visitor session.');
   }
 
   setSessionTokenToCookie(event, token);
   // 响应只返回公开身份信息，不返回 token 或数据库 session id。
-  return { visitor: toPublicVisitor(visitor.visitor) };
+  return apiSuccess(toPublicVisitor(visitor.visitor));
 });

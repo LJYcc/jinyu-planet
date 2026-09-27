@@ -1,3 +1,5 @@
+import type { ApiSuccess } from '~/types/api';
+
 export type VisitorStatus = 'active' | 'blocked';
 
 export type VisitorIdentity = {
@@ -5,7 +7,7 @@ export type VisitorIdentity = {
   status: VisitorStatus;
 };
 
-type VisitorResponse = { visitor: VisitorIdentity };
+type VisitorResponse = ApiSuccess<VisitorIdentity>;
 
 export function useVisitor() {
   // useState 让同一次 Nuxt 应用生命周期内的组件共享访客身份。
@@ -19,7 +21,7 @@ export function useVisitor() {
     try {
       const response = await $fetch<VisitorResponse>('/api/visitors/bootstrap', { method: 'POST' });
       // Cookie 由浏览器自动保存，前端只需要保存可展示的公开身份。
-      visitor.value = response.visitor;
+      visitor.value = response.data;
       return visitor.value;
     } finally {
       isLoading.value = false;
@@ -33,7 +35,7 @@ export function useVisitor() {
       body: nickname === undefined ? {} : { nickname }
     });
     // 更新共享状态，让所有使用 useVisitor 的组件立即刷新显示。
-    visitor.value = response.visitor;
+    visitor.value = response.data;
     return visitor.value;
   }
 
