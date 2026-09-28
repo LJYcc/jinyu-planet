@@ -8,6 +8,7 @@ import {
   VideoPause,
   WarningFilled
 } from '@element-plus/icons-vue';
+import { v4 as uuidv4 } from 'uuid';
 import planetIcon from '~/assets/logo/goldfish-planet-icon.png';
 import type { ApiSuccess } from '~/types/api';
 
@@ -49,7 +50,7 @@ const connectionLabel = computed(() => {
 });
 
 function createMessage(role: ChatRole, content: string): ChatMessage {
-  return { id: crypto.randomUUID(), role, content };
+  return { id: uuidv4(), role, content };
 }
 
 function persistConversation() {

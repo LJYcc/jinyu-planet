@@ -8,4 +8,5 @@ nuxtjs
 rgba
 rowspan
 topbar
+uuidv4
 wangeditor

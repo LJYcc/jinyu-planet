@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { DocumentChecked, RefreshRight, View } from '@element-plus/icons-vue';
+import { v4 as uuidv4 } from 'uuid';
 import { onBeforeRouteLeave } from 'vue-router';
 import writeHeroBg from '~/assets/images/bg-write-desk-dawn-hero.png';
 import writeBottomBg from '~/assets/images/bg-night-mountain-stars.png';
@@ -111,7 +112,7 @@ const previewTitle = computed(() => form.title.trim() || contentText());
 const canPublish = computed(() => Boolean(visitor.value && form.topic && form.clientNonce && !isSubmitting.value));
 
 function createNonce() {
-  return crypto.randomUUID();
+  return uuidv4();
 }
 
 function isPostType(value: unknown): value is PostType {
