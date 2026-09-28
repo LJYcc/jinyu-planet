@@ -1,0 +1,158 @@
+# GitHub Actions：推送 prod 分支后构建镜像、推送 GHCR，再 SSH 部署到服务器。
+name: Build and deploy
+
+# 只有 prod 分支的推送会触发生产部署。
+on:
+  push:
+    branches:
+      - prod
+
+# 工作流内置 GITHUB_TOKEN 仅用于读取源码和推送镜像到 GHCR。
+permissions:
+  contents: read
+  packages: write
+
+# 同一时刻只允许一个生产部署，避免两个提交并发修改同一台服务器。
+concurrency:
+  group: jinyu-planet-production
+  cancel-in-progress: false
+
+# 所有镜像统一发布到 GitHub Container Registry。
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # 在构建镜像前先安装锁定版本的依赖并执行 ESLint。
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:eslint
+
+  build-and-deploy:
+    name: Build and deploy
+    needs: lint
+    runs-on: ubuntu-24.04
+    # production 环境中的 Secrets 只会在此 Job 中注入。
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Define image names
+        id: image
+        shell: bash
+        run: |
+          # GHCR 镜像名称必须为小写；提交 SHA 用于部署精确版本和回滚。
+          echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN 只在 Actions 内使用，服务器拉私有镜像使用 GHCR_TOKEN。
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push application image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          # runtime target 只包含 Nuxt 的运行产物；latest 便于识别，SHA 是实际部署版本。
+          docker build --target runtime --tag "$IMAGE:$TAG" --tag "$IMAGE:latest" .
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:latest"
+
+      - name: Build and push migration image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          # migration target 包含 Prisma CLI，仅用于一次性的结构迁移与主题初始化。
+          docker build --target migration --tag "$IMAGE:$TAG-migrate" .
+          docker push "$IMAGE:$TAG-migrate"
+
+      - name: Deploy on production server
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
+          TAG: ${{ steps.image.outputs.tag }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          # 强制校验服务器主机公钥，避免 SSH 连接遭遇中间人替换。
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          # 私钥只加载到本次 Actions 临时 ssh-agent，不写入工作区。
+          eval "$(ssh-agent -s)"
+          trap 'ssh-agent -k' EXIT
+          ssh-add - <<< "$SSH_PRIVATE_KEY"
+
+          ssh -o StrictHostKeyChecking=yes -p "$SSH_PORT" "$SSH_USERNAME@$SSH_HOST" 'bash -se' <<EOF
+          set -euo pipefail
+          umask 077
+          # 无论远程命令成功或失败，退出时都删除含数据库凭据的临时文件。
+          trap 'rm -f /tmp/jinyu-planet-deploy.env' EXIT
+
+          echo "===== writing temporary deployment environment ====="
+          # Compose 使用此临时文件插值镜像标签和生产数据库连接串，服务器不持久化 .env。
+          cat > /tmp/jinyu-planet-deploy.env <<ENVEOF
+          JINYU_PLANET_IMAGE=$IMAGE:$TAG
+          JINYU_PLANET_MIGRATE_IMAGE=$IMAGE:$TAG-migrate
+          DATABASE_URL=$DATABASE_URL
+          SHADOW_DATABASE_URL=$SHADOW_DATABASE_URL
+          ENVEOF
+          chmod 600 /tmp/jinyu-planet-deploy.env
+
+          echo "===== logging in to GHCR ====="
+          # 私有 GHCR 镜像需要服务器以只读 packages Token 登录后才能拉取。
+          printf '%s' '$GHCR_TOKEN' | docker login -u '$GHCR_USERNAME' --password-stdin ghcr.io
+          # Nginx 与应用容器共用 web 网络；不存在时创建一次。
+          docker network inspect web > /dev/null 2>&1 || docker network create web
+
+          echo "===== pulling application and migration images ====="
+          # 先拉取本次提交对应的运行与迁移镜像，避免误用 latest。
+          docker compose --profile migration --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml pull jinyu-planet migrate
+
+          echo "===== applying database migrations ====="
+          # 必须重定向到空输入：否则 migrate 会继承 SSH here-document 输入并读走后续启动命令。
+          docker compose --profile migration --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml run --rm migrate < /dev/null
+
+          echo "===== starting application container ====="
+          # migration 成功后才更新常驻 Nuxt 应用容器。
+          docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml up -d --remove-orphans jinyu-planet
+
+          echo "===== application container status ====="
+          # 若容器启动后立即退出，打印应用日志并让 CI/CD 失败，防止出现“部署成功但无法访问”。
+          docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml ps jinyu-planet
+          if ! docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml ps --status running --services | grep -qx jinyu-planet; then
+            echo "jinyu-planet did not remain running; recent application logs follow."
+            docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml logs --tail=100 jinyu-planet
+            exit 1
+          fi
+
+          echo "===== reloading reverse proxy ====="
+          # 复用已有 Nginx 服务；IP:3000 预览不依赖 Nginx，但正式域名访问会使用它。
+          docker compose -f /opt/stack/nginx/docker-compose.yml up -d --remove-orphans
+
+          echo "===== pruning unused image layers ====="
+          # 仅清理未被任何容器使用的镜像层，保留当前和仍在运行的镜像。
+          docker image prune -f
+          EOF
