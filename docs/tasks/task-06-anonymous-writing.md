@@ -32,8 +32,8 @@
 - `server/middleware/api-auth.ts`
 - `server/repositories/postRepository.ts`
 - `app/pages/write.vue`
-- `app/components/PostEditor.vue`
-- `app/components/SiteHeader.vue`
+- `app/components/posts/post-editor.vue`
+- `app/components/site-header.vue`
 - `app/pages/posts/index.vue`
 
 **预计范围：** 中等，7 个文件。

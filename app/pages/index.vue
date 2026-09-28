@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import HomeFeaturedSignals from '~/components/home/HomeFeaturedSignals.vue';
-import HomeHero from '~/components/home/HomeHero.vue';
-import HomeIntro from '~/components/home/HomeIntro.vue';
-import HomeLatestSignals from '~/components/home/HomeLatestSignals.vue';
-import HomeTopics from '~/components/home/HomeTopics.vue';
-import HomeVisitorCta from '~/components/home/HomeVisitorCta.vue';
+import HomeFeaturedSignals from '~/components/home/home-featured-signals.vue';
+import HomeHero from '~/components/home/home-hero.vue';
+import HomeIntro from '~/components/home/home-intro.vue';
+import HomeLatestSignals from '~/components/home/home-latest-signals.vue';
+import HomeTopics from '~/components/home/home-topics.vue';
+import HomeVisitorCta from '~/components/home/home-visitor-cta.vue';
 
 useSeoMeta({
   title: '金鱼星球 | Goldfish Planet',

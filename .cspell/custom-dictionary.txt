@@ -7,4 +7,5 @@ Nuxt
 nuxtjs
 rgba
 rowspan
+topbar
 wangeditor

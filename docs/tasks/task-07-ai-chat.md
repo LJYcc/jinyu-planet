@@ -4,22 +4,24 @@
 
 **验收标准：**
 
-- [ ] 所有公开页面的右下角 AI 助理入口都可到达 `/ai-chat`，移动端不遮挡内容或安全区。
-- [ ] AI 页面具备欢迎、建议问题、输入、用户消息、请求中、停止、新建会话、错误和重试状态。
-- [ ] 未配置 AI 服务时，`POST /api/ai/chat` 返回可辨识的未配置错误，界面不伪造模型回答；浏览器代码不含千问密钥。
+- [x] 除 `/ai-chat` 外的公开页面右下角 AI 助理入口都可到达 `/ai-chat`；聊天页不重复显示入口，移动端不遮挡内容或安全区。
+- [x] AI 页面具备欢迎、建议问题、输入、用户消息、请求中、停止、新建会话、错误和重试状态。
+- [x] 聊天侧栏不展示“临时对话”或“仅保存在当前浏览器会话”等过渡性存储文案，为后续数据库接入保留界面空间。
+- [x] AI Chat 页面 Header 顶部保持透明，滚动后使用深色主题背景和浅色导航内容，避免浅色背景穿透聊天界面。
+- [x] 未配置 AI 服务时，`POST /api/ai/chat` 返回可辨识的未配置错误，界面不伪造模型回答；浏览器代码不含千问密钥。
 
 **验证：**
 
-- [ ] 人工检查全部公开页面的入口和 AI 页面各状态。
-- [ ] 检查生产构建产物/浏览器网络请求，确认密钥不出现在客户端。
+- [x] 人工检查全部公开页面的入口和 AI 页面各状态。
+- [x] 检查生产构建产物/浏览器网络请求，确认密钥不出现在客户端。
 
 **依赖：** Task 4。
 
 **可能修改的文件：**
 
-- `app/components/AiAssistantFab.vue`
+- `app/components/ai-chat/ai-assistant-fab.vue`
 - `app/pages/ai-chat.vue`
-- `app/components/AiChatPanel.vue`
+- `app/components/ai-chat/ai-chat-panel.vue`
 - `server/api/ai/chat.post.ts`
 - `server/services/aiClient.ts`
 

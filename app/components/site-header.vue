@@ -7,9 +7,11 @@ const route = useRoute();
 const isScrolled = ref(false);
 const searchKeyword = ref('');
 const isSearchOpen = ref(false);
-const darkHeroRoutes = ['/', '/posts', '/write', '/about'];
+const darkHeroRoutes = ['/', '/posts', '/write', '/about', '/ai-chat'];
 const isHeaderOnDarkHero = computed(() => darkHeroRoutes.includes(route.path) || route.path.startsWith('/posts/'));
-const isHeaderLight = computed(() => isScrolled.value || !isHeaderOnDarkHero.value);
+const isAiChatRoute = computed(() => route.path === '/ai-chat');
+const isHeaderLight = computed(() => !isAiChatRoute.value && (isScrolled.value || !isHeaderOnDarkHero.value));
+const isHeaderDarkScrolled = computed(() => isAiChatRoute.value && isScrolled.value);
 const activeNav = computed(() => (route.path.startsWith('/posts') ? '/posts' : route.path));
 
 const links = [
@@ -49,7 +51,10 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
 <template>
   <header
     class="site-header h-[68px] md:h-[78px]"
-    :class="{ 'site-header--scrolled': isHeaderLight }"
+    :class="{
+      'site-header--scrolled': isHeaderLight,
+      'site-header--dark-scrolled': isHeaderDarkScrolled
+    }"
   >
     <div class="shell-container site-header__inner flex h-full min-h-0 items-center gap-[15px]">
       <nuxt-link
@@ -177,6 +182,14 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
   background-color: rgba(245, 246, 242, 0.96);
   border-bottom-color: rgba(23, 27, 27, 0.08);
   box-shadow: 0 1px 0 rgba(23, 27, 27, 0.09);
+  backdrop-filter: blur(10px);
+}
+
+.site-header--dark-scrolled {
+  color: #f8fbf8;
+  background-color: rgba(16, 27, 29, 0.96);
+  border-bottom-color: rgba(236, 244, 238, 0.16);
+  box-shadow: 0 1px 0 rgba(1, 9, 11, 0.34);
   backdrop-filter: blur(10px);
 }
 

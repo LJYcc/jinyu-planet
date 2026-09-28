@@ -21,10 +21,10 @@
 
 - `app/pages/posts/index.vue`
 - `app/pages/posts/[slug].vue`
-- `app/components/SiteHeader.vue`
-- `app/components/PostList.vue`
-- `app/components/ArticleContent.vue`
+- `app/components/site-header.vue`
+- `app/components/posts/post-list.vue`
+- `app/components/posts/article-content.vue`
 - `app/utils/sanitizeRichText.ts`
-- `app/assets/images/ui-post-detail-page.png`
+- `app/assets/ui/ui-post-detail-page.png`
 
 **预计范围：** 中等，详情页、公共 Header、正文渲染和参考资源相关文件。

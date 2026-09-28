@@ -58,7 +58,7 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 
 ### Phase 3：AI 与质量
 
-- [ ] Task 7: [AI Chat 页面与服务端适配器](task-07-ai-chat.md)
+- [x] Task 7: [AI Chat 页面与服务端适配器](task-07-ai-chat.md)
 - [ ] Task 8: [响应式、可访问性、SEO 与发布质量](task-08-quality-pass.md)
 
 ### Checkpoint：首版完成

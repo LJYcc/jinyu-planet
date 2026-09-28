@@ -4,6 +4,7 @@ import postsHeroBg from '~/assets/images/bg-posts-lakeside-signal-hero.png';
 import sideTopicImage from '~/assets/images/bg-night-mountain-stars.png';
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
+import PostList from '~/components/posts/post-list.vue';
 import type { ApiSuccess } from '~/types/api';
 import type { PostListItem, PostsPage, PublicTopic } from '~/types/post';
 import { postDisplayExcerpt, postDisplayTitle } from '~/utils/postDisplay';

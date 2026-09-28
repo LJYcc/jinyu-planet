@@ -23,7 +23,7 @@
 
 ## Phase 3：AI 与质量
 
-- [ ] Task 7: AI Chat 页面与服务端适配器
+- [x] Task 7: AI Chat 页面与服务端适配器
 - [ ] Task 8: 响应式、可访问性、SEO 与发布质量
 
 ## Checkpoint：首版完成

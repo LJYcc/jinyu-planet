@@ -1,26 +1,43 @@
 <script setup lang="ts">
+import chatBackground from '~/assets/images/bg-ai-chat-star-valley-hero-v8.png';
+import AiChatPanel from '~/components/ai-chat/ai-chat-panel.vue';
+
 useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任何问题。' });
 </script>
 
 <template>
-  <section class="placeholder-page shell-container min-h-[60vh] pb-[120px] pt-[170px]">
-    <p class="eyebrow">GOLDFISH PLANET / AI CHAT</p>
-    <h1 class="mb-[18px] text-[clamp(42px,8vw,78px)] font-medium">AI 助理</h1>
-    <p class="mb-8 max-w-[500px] text-[var(--muted)] leading-[1.9]">
-      AI 对话功能暂未开放，之后会在这里和你聊聊想法。请勿输入密码、身份证号等敏感信息。
-    </p>
-    <nuxt-link
-      v-slot="{ navigate }"
-      to="/"
-      custom
-    >
-      <el-button
-        type="primary"
-        size="large"
-        class="arrow-hover"
-        @click="navigate"
-        >返回首页 <span aria-hidden="true">↗</span></el-button
-      >
-    </nuxt-link>
+  <section
+    class="ai-chat-page"
+    :style="{
+      backgroundImage: `linear-gradient(180deg, rgba(4, 17, 20, 0.4), rgba(4, 17, 20, 0.74)), url(${chatBackground})`
+    }"
+  >
+    <div class="shell-container ai-chat-page__inner">
+      <ai-chat-panel />
+    </div>
   </section>
 </template>
+
+<style scoped lang="scss">
+.ai-chat-page {
+  min-height: 100vh;
+  padding: 96px 0 32px;
+  background-color: var(--night);
+  background-position: center;
+  background-size: cover;
+}
+
+.ai-chat-page__inner {
+  min-height: calc(100vh - 128px);
+}
+
+@media (max-width: 760px) {
+  .ai-chat-page {
+    padding: 84px 0 28px;
+  }
+
+  .ai-chat-page__inner {
+    min-height: calc(100vh - 112px);
+  }
+}
+</style>

@@ -3,6 +3,8 @@ import { DocumentChecked, RefreshRight, View } from '@element-plus/icons-vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import writeHeroBg from '~/assets/images/bg-write-desk-dawn-hero.png';
 import writeBottomBg from '~/assets/images/bg-night-mountain-stars.png';
+import ArticleContent from '~/components/posts/article-content.vue';
+import PostEditor from '~/components/posts/post-editor.vue';
 import type { ApiSuccess } from '~/types/api';
 import type { PublicTopic } from '~/types/post';
 
