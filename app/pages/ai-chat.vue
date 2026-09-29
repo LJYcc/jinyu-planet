@@ -28,7 +28,10 @@ useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任�
 }
 
 .ai-chat-page__inner {
+  --container: 1280px;
+  height: calc(100vh - 128px);
   min-height: calc(100vh - 128px);
+  overflow: hidden;
 }
 
 @media (max-width: 760px) {
@@ -37,6 +40,7 @@ useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任�
   }
 
   .ai-chat-page__inner {
+    height: calc(100vh - 112px);
     min-height: calc(100vh - 112px);
   }
 }

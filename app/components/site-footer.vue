@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import footerBg from '~/assets/images/bg-night-mountain-stars.png';
-import logoLight from '~/assets/logo/goldfish-planet-logo-light.png';
+import logoLight from '~/assets/logo/goldfish-planet-logo-light-tech.png';
 </script>
 
 <template>

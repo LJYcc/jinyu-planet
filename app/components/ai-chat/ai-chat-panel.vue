@@ -1,140 +1,500 @@
 <script setup lang="ts">
-import {
-  ChatDotRound,
-  Loading,
-  Plus,
-  Promotion,
-  RefreshRight,
-  VideoPause,
-  WarningFilled
-} from '@element-plus/icons-vue';
+/**
+ * AI Chat 页面控制器。
+ *
+ * 这里集中管理当前会话、历史会话、消息流和请求状态；子组件只负责界面展示，
+ * 通过 props 接收数据，并通过 emits 把用户操作交回本组件处理。
+ */
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
-import planetIcon from '~/assets/logo/goldfish-planet-icon.png';
-import type { ApiSuccess } from '~/types/api';
+import { useVisitor } from '~/composables/useVisitor';
+import AiConversationSidebar from '~/components/ai-chat/ai-conversation-sidebar.vue';
+import AiNewConversation from '~/components/ai-chat/ai-new-conversation.vue';
+import {
+  createAiConversation,
+  deleteAiConversation,
+  listAiConversationMessages,
+  listAiConversations,
+  streamAiConversationMessage,
+  updateAiConversation
+} from '~/services/ai-conversation-api';
+import type { ChatMessage, ChatRole, Conversation, StreamEvent } from '~/types/ai-chat';
 
-type ChatRole = 'user' | 'assistant';
-
-type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  content: string;
-};
-
-type ChatReply = {
-  role: 'assistant';
-  content: string;
-};
-
+// 这个组件是 AI 聊天的控制器：负责会话、请求、流式解析和错误状态。
+// 视觉展示与输入交互分别交给三个子组件，避免把业务流程和页面结构混在一起。
 type ApiErrorPayload = {
   code?: string;
   message?: string;
 };
 
-const suggestions = ['帮我整理一下今天的想法', '解释一个技术概念', '给我一个周末去处的灵感'];
-const STORAGE_KEY = 'goldfish-planet-ai-chat';
+const TYPEWRITER_CHARACTER_DELAY_MS = 28;
 
-// 页面状态先由前端维护，后续可将持久化边界替换为数据库接口。
+const { bootstrap, visitor } = useVisitor();
+const route = useRoute();
+const router = useRouter();
 const messages = ref<ChatMessage[]>([]);
+const conversations = ref<Conversation[]>([]);
+const conversationId = ref<string>();
 const input = ref('');
+const isLoadingHistory = ref(false);
 const isSending = ref(false);
 const requestError = ref('');
 const lastFailedMessage = ref('');
+const lastFailedNonce = ref('');
+const typingMessageId = ref<string>();
+const isSidebarCollapsed = ref(false);
 let abortController: AbortController | undefined;
 let requestSequence = 0;
 
-const hasMessages = computed(() => messages.value.length > 0);
-const connectionLabel = computed(() => {
-  if (isSending.value) return '正在生成';
-  if (requestError.value) return '服务未连接';
-  return '等待消息';
+const currentConversation = computed(() => {
+  return conversations.value.find(item => {
+    return item.id === conversationId.value;
+  });
+});
+const conversationTitle = computed(() => {
+  return currentConversation.value?.title || '新对话';
 });
 
-function createMessage(role: ChatRole, content: string): ChatMessage {
-  return { id: uuidv4(), role, content };
+// 没有会话 ID 且消息列表为空，表示访客正处于延迟创建的新对话状态。
+const isNewConversation = computed(() => {
+  return !conversationId.value && messages.value.length === 0;
+});
+
+/** 创建一个带前端 ID 的消息对象，用于立即更新消息列表。 */
+function createMessage(role: ChatRole, content: string, createdAt?: string): ChatMessage {
+  return {
+    id: uuidv4(),
+    role,
+    content,
+    createdAt
+  };
 }
 
-function persistConversation() {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.value));
-}
-
-function restoreConversation() {
-  const saved = sessionStorage.getItem(STORAGE_KEY);
-  if (!saved) return;
-
-  try {
-    const parsed = JSON.parse(saved) as unknown;
-    if (!Array.isArray(parsed)) return;
-    messages.value = parsed.filter(
-      (message): message is ChatMessage =>
-        typeof message === 'object' &&
-        message !== null &&
-        (message.role === 'user' || message.role === 'assistant') &&
-        typeof message.content === 'string' &&
-        typeof message.id === 'string'
-    );
-  } catch {
-    sessionStorage.removeItem(STORAGE_KEY);
-  }
-}
-
-// 将服务端错误收敛为可直接展示给访客的短消息，避免暴露内部异常细节。
+/** 将服务端错误转换为用户可以理解的提示文字。 */
 function getApiError(error: unknown) {
   const payload = (error as { data?: ApiErrorPayload }).data;
   if (payload?.code === 'AI_SERVICE_NOT_CONFIGURED') {
-    return 'AI 服务尚未配置，因此没有生成回复。请稍后再试。';
+    return 'AI 服务尚未配置，因此没有生成回复。';
   }
+
+  if (payload?.code === 'AI_PROVIDER_CREDITS_REQUIRED') {
+    return 'AI 服务当前没有可用额度。';
+  }
+
+  if (payload?.code === 'AI_PROVIDER_AUTH_FAILED') {
+    return 'AI 服务鉴权失败，请检查服务端配置。';
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
   return payload?.message || '请求没有完成，请检查网络后重试。';
 }
 
-// 发送和重试共用同一条请求链路，使用序号忽略已经失效的并发响应。
+/** 更新当前会话 ID；没有 ID 表示页面处于延迟创建的新对话状态。 */
+function setConversationId(id?: string) {
+  conversationId.value = id;
+}
+
+/** 读取指定历史会话的消息，并将其设为当前会话。 */
+async function loadConversation(id: string) {
+  isLoadingHistory.value = true;
+  requestError.value = '';
+  try {
+    const conversationMessages = await listAiConversationMessages(id);
+    setConversationId(id);
+    messages.value = conversationMessages;
+    return true;
+  } catch (error) {
+    requestError.value = getApiError(error);
+    return false;
+  } finally {
+    isLoadingHistory.value = false;
+  }
+}
+
+/** 从 URL 查询参数中读取单个会话 ID；其他格式仍按普通的新对话页面处理。 */
+function getConversationIdFromQuery() {
+  const conversation = route.query.conversation;
+  return typeof conversation === 'string' ? conversation : undefined;
+}
+
+/** 读取分享链接成功后移除会话参数，避免刷新时重复触发 URL 定位流程。 */
+async function clearConversationQuery() {
+  const nextQuery = { ...route.query };
+  delete nextQuery.conversation;
+
+  await router.replace({
+    path: route.path,
+    query: nextQuery,
+    hash: route.hash
+  });
+}
+
+/**
+ * 初始化会话列表。
+ *
+ * 普通进入页面时展示新对话；从分享链接进入且会话属于当前匿名访客时，
+ * 读取该会话的历史消息。归属校验仍由会话列表和服务端接口共同保障。
+ */
+async function loadConversations() {
+  conversations.value = await listAiConversations();
+  messages.value = [];
+  setConversationId();
+
+  const requestedConversationId = getConversationIdFromQuery();
+  const hasRequestedConversation = conversations.value.some(conversation => {
+    return conversation.id === requestedConversationId;
+  });
+
+  if (requestedConversationId && hasRequestedConversation) {
+    const hasLoadedConversation = await loadConversation(requestedConversationId);
+    if (hasLoadedConversation) {
+      await clearConversationQuery();
+    }
+  }
+}
+
+/** 首次发送消息前创建数据库会话，避免点击“新建对话”产生空记录。 */
+async function ensureConversation() {
+  if (conversationId.value) {
+    return conversationId.value;
+  }
+
+  // “新建对话”只是清空页面。只有发送第一条内容时才创建数据库会话，避免留下空记录。
+  const conversation = await createAiConversation();
+  conversations.value = [conversation, ...conversations.value];
+  setConversationId(conversation.id);
+  return conversation.id;
+}
+
+/** 使用首条用户消息临时更新标题，让侧栏无需刷新即可显示标题。 */
+function updateConversationTitle(currentConversationId: string, firstMessage: string) {
+  const conversation = conversations.value.find(item => {
+    return item.id === currentConversationId;
+  });
+
+  if (!conversation || conversation.title) {
+    return;
+  }
+
+  // 服务端也使用首条 user 消息的前 160 个字符作为标题，前端同步更新避免等待刷新。
+  conversation.title = firstMessage.slice(0, 160);
+}
+
+/** 用服务端返回的完整会话替换本地数据，并保持置顶排序。 */
+function replaceConversation(updatedConversation: Conversation) {
+  conversations.value = conversations.value.map(conversation => {
+    return conversation.id === updatedConversation.id ? updatedConversation : conversation;
+  });
+  sortConversationList();
+}
+
+/** 置顶会话优先，其余会话按最近更新时间倒序排列。 */
+function sortConversationList() {
+  conversations.value.sort((first, second) => {
+    if (first.isPinned !== second.isPinned) {
+      return first.isPinned ? -1 : 1;
+    }
+
+    return new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime();
+  });
+}
+
+/** 保存内容区行内编辑后的会话标题。 */
+async function saveConversationTitle(title: string) {
+  if (!conversationId.value || title === conversationTitle.value) {
+    return;
+  }
+
+  try {
+    const updatedConversation = await updateAiConversation(conversationId.value, { title });
+    replaceConversation(updatedConversation);
+    ElMessage.success('标题已更新。');
+  } catch (error) {
+    requestError.value = getApiError(error);
+  }
+}
+
+/** 通过弹窗重命名侧栏中的会话。 */
+async function renameConversation(conversation: Conversation) {
+  try {
+    const result = await ElMessageBox.prompt('请输入新的会话标题。', '重命名会话', {
+      inputValue: conversation.title || '新对话',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputValidator: value => {
+        return Boolean(value.trim()) || '标题不能为空。';
+      }
+    });
+    const updatedConversation = await updateAiConversation(conversation.id, { title: result.value.trim() });
+    replaceConversation(updatedConversation);
+    ElMessage.success('标题已更新。');
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      requestError.value = getApiError(error);
+    }
+  }
+}
+
+/** 切换单个会话的置顶状态。 */
+async function togglePinConversation(conversation: Conversation) {
+  try {
+    const updatedConversation = await updateAiConversation(conversation.id, { isPinned: !conversation.isPinned });
+    replaceConversation(updatedConversation);
+  } catch (error) {
+    requestError.value = getApiError(error);
+  }
+}
+
+/** 复制会话链接；实际分享权限仍由服务端和页面路由决定。 */
+async function shareConversation(conversation: Conversation) {
+  const shareUrl = `${window.location.origin}/ai-chat?conversation=${conversation.id}`;
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    ElMessage.success('会话链接已复制。');
+  } catch (error) {
+    requestError.value = getApiError(error);
+  }
+}
+
+/** 确认并批量删除选中的会话，必要时返回新对话页面。 */
+async function removeSelectedConversations(conversationIds: string[]) {
+  if (!conversationIds.length) {
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(`删除选中的 ${conversationIds.length} 个会话及其全部消息？`, '批量删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    });
+    await Promise.all(
+      conversationIds.map(id => {
+        return deleteAiConversation(id);
+      })
+    );
+    conversations.value = conversations.value.filter(conversation => {
+      return !conversationIds.includes(conversation.id);
+    });
+    if (conversationId.value && conversationIds.includes(conversationId.value)) {
+      startNewConversation();
+    }
+    ElMessage.success('选中的会话已删除。');
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      requestError.value = getApiError(error);
+    }
+  }
+}
+
+/** 将选中的多个会话批量置顶，并同步更新本地列表。 */
+async function pinSelectedConversations(conversationIds: string[]) {
+  if (!conversationIds.length) {
+    return;
+  }
+
+  try {
+    const updatedConversations = await Promise.all(
+      conversationIds.map(id => {
+        return updateAiConversation(id, { isPinned: true });
+      })
+    );
+    updatedConversations.forEach(updatedConversation => {
+      replaceConversation(updatedConversation);
+    });
+    ElMessage.success('选中的会话已置顶。');
+  } catch (error) {
+    requestError.value = getApiError(error);
+  }
+}
+
+/** 从 SSE 错误事件中提取可展示的错误信息。 */
+function parseStreamError(event: StreamEvent) {
+  if (event.message) {
+    return event.message;
+  }
+
+  return 'AI 服务没有完成本次回答。';
+}
+
+/** 为逐字渲染提供一个可配置的字符间隔。 */
+function waitForTypewriterDelay() {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, TYPEWRITER_CHARACTER_DELAY_MS);
+  });
+}
+
+/** 将一个流式片段按 Unicode 字符逐个追加到 assistant 消息。 */
+async function appendTypewriterDelta(content: string, assistantMessage: ChatMessage, signal: AbortSignal) {
+  // Array.from 按 Unicode 字符遍历，不会把 emoji 等字符拆成无效的 UTF-16 片段。
+  for (const character of Array.from(content)) {
+    if (signal.aborted) {
+      throw new DOMException('The AI request was stopped.', 'AbortError');
+    }
+
+    assistantMessage.content += character;
+    // 每个字符让出一个定时器周期，使 Vue 和浏览器有机会完成一次可见绘制。
+    await waitForTypewriterDelay();
+  }
+}
+
+/** 读取服务端 SSE 响应，解析 delta、error 和 done 事件。 */
+async function consumeStream(response: Response, assistantMessage: ChatMessage, signal: AbortSignal) {
+  if (!response.body) {
+    throw new Error('AI response body is empty.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      // SSE 的一个网络分块可能包含半条或多条事件，因此按换行切分并保留残缺尾部。
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+
+        const data = line.slice(5).trim();
+        if (!data) {
+          continue;
+        }
+
+        const streamEvent = JSON.parse(data) as StreamEvent;
+        if (streamEvent.type === 'delta' && streamEvent.content) {
+          await appendTypewriterDelta(streamEvent.content, assistantMessage, signal);
+        }
+
+        if (streamEvent.type === 'error') {
+          throw new Error(parseStreamError(streamEvent));
+        }
+
+        if (streamEvent.type === 'done') {
+          return;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** 发送当前消息，负责幂等 nonce、乐观更新、流式渲染和失败回滚。 */
 async function requestReply(content: string, isRetry = false) {
   const message = content.trim();
-  if (!message || isSending.value) return;
+  if (!message || isSending.value || isLoadingHistory.value) {
+    return;
+  }
 
-  if (!isRetry) messages.value.push(createMessage('user', message));
+  let id: string;
+  try {
+    id = await ensureConversation();
+  } catch (error) {
+    requestError.value = getApiError(error);
+    return;
+  }
+
+  const clientNonce = isRetry && lastFailedNonce.value ? lastFailedNonce.value : uuidv4();
+  if (!isRetry) {
+    // 先乐观显示用户消息；标题规则与服务端一致，因而可以立即更新而不必等待刷新。
+    messages.value.push(createMessage('user', message));
+    updateConversationTitle(id, message);
+  }
+
   input.value = '';
   requestError.value = '';
   lastFailedMessage.value = message;
+  lastFailedNonce.value = clientNonce;
   isSending.value = true;
   const currentRequest = ++requestSequence;
   const currentAbortController = new AbortController();
   abortController = currentAbortController;
 
+  // 后续逐字修改必须作用于 Vue 的 reactive 对象，模板才能在每个字符到达时更新。
+  const assistantMessage = reactive<ChatMessage>(createMessage('assistant', ''));
+  messages.value.push(assistantMessage);
+  typingMessageId.value = assistantMessage.id;
+
   try {
-    const response = await $fetch<ApiSuccess<ChatReply>>('/api/ai/chat', {
-      method: 'POST',
-      signal: currentAbortController.signal,
-      body: {
-        messages: messages.value.map(({ role, content: messageContent }) => ({ role, content: messageContent }))
-      }
-    });
-    if (currentRequest !== requestSequence) return;
-    messages.value.push(createMessage('assistant', response.data.content));
+    const response = await streamAiConversationMessage(id, message, clientNonce, currentAbortController.signal);
+
+    if (!response.ok) {
+      const responsePayload = await response.json().catch(() => {
+        return undefined;
+      });
+      const payload = responsePayload as ApiErrorPayload | undefined;
+      const error = Object.assign(new Error(payload?.message || 'AI 请求失败。'), {
+        data: payload
+      });
+      throw error;
+    }
+
+    await consumeStream(response, assistantMessage, currentAbortController.signal);
+    if (currentRequest !== requestSequence) {
+      return;
+    }
+
+    if (!assistantMessage.content.trim()) {
+      throw new Error('AI 没有返回可显示的内容。');
+    }
+
     lastFailedMessage.value = '';
+    lastFailedNonce.value = '';
   } catch (error) {
-    if (currentRequest !== requestSequence) return;
-    requestError.value = currentAbortController.signal.aborted ? '已停止本次请求，尚未收到回复。' : getApiError(error);
+    const isStopped = currentAbortController.signal.aborted;
+    if (currentRequest !== requestSequence) {
+      return;
+    }
+
+    messages.value = messages.value.filter(messageItem => {
+      return messageItem.id !== assistantMessage.id;
+    });
+
+    if (isStopped) {
+      requestError.value = '已停止本次请求，尚未保存 AI 回复。';
+    } else {
+      requestError.value = getApiError(error);
+    }
   } finally {
     if (currentRequest === requestSequence) {
       isSending.value = false;
       abortController = undefined;
+      typingMessageId.value = undefined;
     }
   }
 }
 
-function sendMessage() {
-  void requestReply(input.value);
+/** 发送输入框中的新消息。 */
+async function sendMessage() {
+  await requestReply(input.value);
 }
 
-function retryLastMessage() {
-  void requestReply(lastFailedMessage.value, true);
+/** 使用相同 nonce 重试上一次失败的消息。 */
+async function retryLastMessage() {
+  await requestReply(lastFailedMessage.value, true);
 }
 
-// 中止请求后由 catch 分支统一更新提示和按钮状态。
+/** 中止当前 AI 请求；已生成的临时 assistant 内容不会伪装成完整回答。 */
 function stopGenerating() {
-  abortController?.abort();
+  if (abortController) {
+    abortController.abort();
+  }
 }
 
+/** 清空当前页面并进入未保存的新对话状态。 */
 function startNewConversation() {
   requestSequence += 1;
   stopGenerating();
@@ -143,177 +503,106 @@ function startNewConversation() {
   input.value = '';
   requestError.value = '';
   lastFailedMessage.value = '';
-  sessionStorage.removeItem(STORAGE_KEY);
+  lastFailedNonce.value = '';
+  typingMessageId.value = undefined;
+  setConversationId();
 }
 
+/** 确认并删除单个会话，删除当前会话后回到新对话页面。 */
+async function deleteConversation(conversation: Conversation) {
+  try {
+    await ElMessageBox.confirm(`删除“${conversation.title || '新对话'}”及其全部消息？`, '删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    });
+    await deleteAiConversation(conversation.id);
+    conversations.value = conversations.value.filter(item => {
+      return item.id !== conversation.id;
+    });
+
+    if (conversation.id === conversationId.value) {
+      startNewConversation();
+    }
+
+    ElMessage.success('会话已删除。');
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      requestError.value = getApiError(error);
+    }
+  }
+}
+
+/** 将推荐问题填入输入框，等待用户确认发送。 */
 function useSuggestion(suggestion: string) {
   input.value = suggestion;
 }
 
-// Enter 发送消息，Shift+Enter 保留多行输入。
-function handleComposerKeydown(event: Event) {
-  if (!(event instanceof KeyboardEvent)) return;
-
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault();
-    sendMessage();
+onMounted(async () => {
+  try {
+    await bootstrap();
+    await loadConversations();
+  } catch (error) {
+    requestError.value = getApiError(error);
   }
-}
+});
 
-watch(messages, persistConversation, { deep: true });
-onMounted(restoreConversation);
 onBeforeUnmount(stopGenerating);
 </script>
 
 <template>
-  <section class="ai-chat-panel">
-    <!-- 侧栏仅保留会话操作，消息内容由主区域负责展示。 -->
-    <aside class="ai-chat-panel__side">
-      <div>
-        <p class="eyebrow ai-chat-panel__eyebrow">GOLDFISH PLANET / AI</p>
-        <h2 class="m-0 text-[26px] leading-[1.35] text-[#f6f7f0]">AI 对话</h2>
-      </div>
-      <el-button
-        class="w-full"
-        :icon="Plus"
-        @click="startNewConversation"
-      >
-        新建对话
-      </el-button>
-    </aside>
+  <section
+    class="ai-chat-panel"
+    :class="{ 'ai-chat-panel--sidebar-collapsed': isSidebarCollapsed }"
+  >
+    <!-- 子组件只通过 props 展示状态、通过事件把用户操作交回控制器。 -->
+    <ai-conversation-sidebar
+      :conversations="conversations"
+      :active-conversation-id="conversationId"
+      :disabled="isSending || isLoadingHistory"
+      :collapsed="isSidebarCollapsed"
+      :visitor-nickname="visitor?.nickname || '匿名访客'"
+      @create="startNewConversation"
+      @select="loadConversation"
+      @remove="deleteConversation"
+      @rename="renameConversation"
+      @toggle-pin="togglePinConversation"
+      @share="shareConversation"
+      @remove-selected="removeSelectedConversations"
+      @pin-selected="pinSelectedConversations"
+      @toggle-collapse="isSidebarCollapsed = !isSidebarCollapsed"
+    />
 
     <div class="ai-chat-panel__main">
-      <!-- 顶部状态栏展示连接状态，并提供快速新建会话入口。 -->
-      <header class="ai-chat-panel__topbar">
-        <div class="flex min-w-0 items-center gap-3">
-          <span class="ai-chat-panel__avatar"><chat-dot-round /></span>
-          <div>
-            <strong class="block text-[15px] text-[#f6f7f0]">AI 助理</strong>
-            <span class="ai-chat-panel__status">{{ connectionLabel }}</span>
-          </div>
-        </div>
-        <el-button
-          :icon="Plus"
-          text
-          aria-label="新建对话"
-          @click="startNewConversation"
+      <ai-new-conversation
+        v-if="isNewConversation"
+        v-model="input"
+        :is-sending="isSending"
+        :request-error="requestError"
+        :can-retry="Boolean(lastFailedMessage)"
+        @send="sendMessage"
+        @stop="stopGenerating"
+        @retry="retryLastMessage"
+        @use-suggestion="useSuggestion"
+      />
+      <template v-else>
+        <ai-chat-content
+          :conversation-title="conversationTitle"
+          :messages="messages"
+          :is-sending="isSending"
+          :request-error="requestError"
+          :can-retry="Boolean(lastFailedMessage)"
+          :typing-message-id="typingMessageId"
+          @rename="saveConversationTitle"
+          @retry="retryLastMessage"
         />
-      </header>
-
-      <!-- 消息区域根据当前状态切换欢迎页、消息列表、生成中和错误提示。 -->
-      <div class="ai-chat-panel__messages">
-        <div
-          v-if="!hasMessages"
-          class="ai-chat-panel__welcome"
-        >
-          <img
-            :src="planetIcon"
-            class="ai-chat-panel__welcome-icon"
-            alt=""
-          />
-          <p class="eyebrow ai-chat-panel__eyebrow">UNIVERSAL AI CHAT</p>
-          <h1 class="m-0 text-[38px] font-medium leading-[1.2] text-[#f6f7f0] md:text-[48px]">你好，我是星球小鱼</h1>
-          <p class="mb-0 max-w-[620px] leading-[1.9] text-[#c4d0ca]">
-            这里可以聊任何问题。服务接入后，消息将由真实 AI 生成；在此之前，页面会如实告诉你连接状态。
-          </p>
-          <div class="ai-chat-panel__suggestions">
-            <el-button
-              v-for="suggestion in suggestions"
-              :key="suggestion"
-              plain
-              @click="useSuggestion(suggestion)"
-            >
-              {{ suggestion }}
-            </el-button>
-          </div>
-        </div>
-
-        <div
-          v-else
-          class="ai-chat-panel__message-list"
-          aria-live="polite"
-        >
-          <article
-            v-for="message in messages"
-            :key="message.id"
-            class="ai-chat-panel__message"
-            :class="`ai-chat-panel__message--${message.role}`"
-          >
-            <p class="ai-chat-panel__message-label">{{ message.role === 'user' ? '你' : 'AI 助理' }}</p>
-            <p>{{ message.content }}</p>
-          </article>
-        </div>
-
-        <div
-          v-if="isSending"
-          class="ai-chat-panel__pending"
-          role="status"
-        >
-          <el-icon class="is-loading"><loading /></el-icon>
-          AI 助理正在生成回复...
-        </div>
-
-        <div
-          v-if="requestError"
-          class="ai-chat-panel__error"
-        >
-          <el-alert
-            :title="requestError"
-            type="error"
-            :icon="WarningFilled"
-            show-icon
-            :closable="false"
-          />
-          <div class="mt-2">
-            <el-button
-              v-if="lastFailedMessage"
-              :icon="RefreshRight"
-              text
-              type="primary"
-              @click="retryLastMessage"
-            >
-              重新发送
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 输入区固定高度，发送按钮和输入框保持等高。 -->
-      <div class="ai-chat-panel__composer-wrap">
-        <form
-          class="ai-chat-panel__composer"
-          @submit.prevent="sendMessage"
-        >
-          <el-input
-            v-model="input"
-            type="textarea"
-            :rows="3"
-            maxlength="4000"
-            show-word-limit
-            placeholder="给 AI 助理发消息..."
-            aria-label="聊天内容"
-            :disabled="isSending"
-            @keydown="handleComposerKeydown"
-          />
-          <el-button
-            v-if="isSending"
-            class="ai-chat-panel__composer-action"
-            :icon="VideoPause"
-            aria-label="停止生成"
-            @click="stopGenerating"
-          />
-          <el-button
-            v-else
-            class="ai-chat-panel__composer-action"
-            type="primary"
-            native-type="submit"
-            :icon="Promotion"
-            :disabled="!input.trim()"
-            aria-label="发送消息"
-          />
-        </form>
-        <p class="ai-chat-panel__disclaimer">请勿输入密码、身份证号等敏感信息；AI 回答可能有误，请自行判断。</p>
-      </div>
+        <ai-chat-composer
+          v-model="input"
+          :is-sending="isSending"
+          @send="sendMessage"
+          @stop="stopGenerating"
+        />
+      </template>
     </div>
   </section>
 </template>
@@ -321,290 +610,46 @@ onBeforeUnmount(stopGenerating);
 <style scoped lang="scss">
 .ai-chat-panel {
   display: grid;
+  height: calc(100vh - 128px);
   min-height: calc(100vh - 128px);
   overflow: hidden;
-  border: 1px solid rgba(218, 235, 225, 0.28);
   color: #f6f7f0;
-  background: rgba(4, 20, 24, 0.82);
-  box-shadow: 0 22px 58px rgba(1, 9, 11, 0.38);
-  backdrop-filter: blur(6px);
+  gap: 5px;
   grid-template-columns: 250px minmax(0, 1fr);
+  transition: grid-template-columns 220ms ease;
 }
 
-.ai-chat-panel__side {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  padding: 30px 24px;
-  border-right: 1px solid rgba(218, 235, 225, 0.18);
-  background: rgba(5, 22, 25, 0.78);
-}
-
-.ai-chat-panel__eyebrow {
-  color: #aac1b6;
-}
-
-.ai-chat-panel__side :deep(.el-button) {
-  min-height: 46px;
-  margin: 0;
-  border-color: rgba(239, 246, 240, 0.66);
-  color: #f5f7f1;
-  background: transparent;
-}
-
-.ai-chat-panel__side :deep(.el-button:hover),
-.ai-chat-panel__side :deep(.el-button:focus-visible) {
-  border-color: var(--accent);
-  color: var(--night);
-  background: var(--accent);
+.ai-chat-panel--sidebar-collapsed {
+  grid-template-columns: 66px minmax(0, 1fr);
 }
 
 .ai-chat-panel__main {
   display: flex;
+  min-height: 0;
   min-width: 0;
   flex-direction: column;
-}
-
-.ai-chat-panel__topbar {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  border-bottom: 1px solid rgba(218, 235, 225, 0.2);
-  background: rgba(4, 20, 24, 0.36);
-}
-
-.ai-chat-panel__avatar {
-  display: grid;
-  width: 35px;
-  height: 35px;
-  place-items: center;
-  color: var(--night);
-  background: var(--accent);
-  border-radius: 50%;
-}
-
-.ai-chat-panel__status {
-  display: block;
-  margin-top: 3px;
-  color: #9db3a9;
-  font:
-    10px ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ai-chat-panel__messages {
-  min-height: 0;
-  overflow-y: auto;
-  flex: 1;
-  padding: 42px clamp(24px, 5vw, 70px);
-}
-
-.ai-chat-panel__welcome > p:not(.eyebrow) {
-  margin-top: 18px;
-}
-
-.ai-chat-panel__welcome {
-  display: flex;
-  min-height: 390px;
-  align-items: flex-start;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.ai-chat-panel__welcome-icon {
-  width: 104px;
-  height: 104px;
-  margin-bottom: 14px;
-  object-fit: contain;
-  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.3));
-}
-
-.ai-chat-panel__suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 34px;
-}
-
-.ai-chat-panel__suggestions :deep(.el-button) {
-  height: auto;
-  min-height: 38px;
-  margin: 0;
-  border-color: rgba(230, 242, 234, 0.62);
-  color: #eef4ee;
-  background: rgba(4, 18, 22, 0.38);
-  white-space: normal;
-}
-
-.ai-chat-panel__suggestions :deep(.el-button:hover),
-.ai-chat-panel__suggestions :deep(.el-button:focus-visible) {
-  border-color: var(--accent);
-  color: var(--night);
-  background: var(--accent);
-}
-
-.ai-chat-panel__message-list {
-  display: grid;
-  gap: 22px;
-}
-
-.ai-chat-panel__message {
-  max-width: min(88%, 680px);
-}
-
-.ai-chat-panel__message-label {
-  margin: 0 0 7px;
-  color: #b1c2bb;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ai-chat-panel__message > p:last-child {
-  margin: 0;
-  padding: 14px 16px;
-  overflow-wrap: anywhere;
-  border-radius: 8px;
-  line-height: 1.8;
-  background: rgba(23, 48, 52, 0.82);
-}
-
-.ai-chat-panel__message--user {
-  margin-left: auto;
-}
-
-.ai-chat-panel__message--user .ai-chat-panel__message-label {
-  text-align: right;
-}
-
-.ai-chat-panel__message--user > p:last-child {
-  color: #f8faf6;
-  background: rgba(86, 110, 109, 0.82);
-}
-
-.ai-chat-panel__pending {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 24px;
-  color: #c2d0c9;
-  font-size: 13px;
-}
-
-.ai-chat-panel__error {
-  margin-top: 24px;
-}
-
-.ai-chat-panel__composer-wrap {
-  padding: 20px 24px 22px;
-  border-top: 1px solid rgba(218, 235, 225, 0.2);
-  background: rgba(3, 17, 20, 0.78);
-}
-
-.ai-chat-panel__composer {
-  --composer-height: 96px;
-  display: grid;
-  align-items: end;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) var(--composer-height);
-}
-
-.ai-chat-panel__composer-action {
-  width: var(--composer-height);
-  height: var(--composer-height);
-  margin: 0;
-}
-
-.ai-chat-panel__composer :deep(.el-textarea__inner) {
-  min-height: var(--composer-height) !important;
-  height: var(--composer-height);
-  resize: none;
-  border: 1px solid rgba(229, 241, 233, 0.62);
-  color: #f4f7f1;
-  background: rgba(7, 30, 34, 0.84);
-  box-shadow: none;
-}
-
-.ai-chat-panel__composer :deep(.el-textarea__inner::placeholder) {
-  color: #a8bbb3;
-}
-
-.ai-chat-panel__composer :deep(.el-textarea__inner:focus) {
-  border-color: var(--accent);
-}
-
-.ai-chat-panel__composer :deep(.el-input__count) {
-  color: #a8bbb3;
-  background: transparent;
-}
-
-.ai-chat-panel__composer :deep(.el-button:not(.el-button--primary)) {
-  border-color: rgba(229, 241, 233, 0.62);
-  color: #f4f7f1;
-  background: transparent;
-}
-
-.ai-chat-panel__disclaimer {
-  margin: 10px 0 0;
-  color: #a8bbb3;
-  font-size: 12px;
-  line-height: 1.7;
+  overflow: hidden;
+  border: 1px solid rgba(218, 235, 225, 0.2);
+  border-radius: 12px;
+  background: rgba(4, 20, 24, 0.58);
+  box-shadow: 0 22px 58px rgba(1, 9, 11, 0.28);
 }
 
 @media (max-width: 900px) {
   .ai-chat-panel {
-    min-height: calc(100vh - 112px);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-columns: 1fr;
   }
 
-  .ai-chat-panel__side {
-    display: grid;
-    align-items: center;
-    padding: 20px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    grid-template-columns: minmax(0, 1fr) auto;
+  .ai-chat-panel--sidebar-collapsed {
+    grid-template-columns: 1fr;
   }
+}
 
-  .ai-chat-panel__side .eyebrow {
-    display: none;
-  }
-
-  .ai-chat-panel__side :deep(.el-button) {
-    width: auto;
-  }
-
-  .ai-chat-panel__messages {
-    min-height: 430px;
-    padding: 30px 20px;
-  }
-
-  .ai-chat-panel__topbar,
-  .ai-chat-panel__composer-wrap {
-    padding-right: 20px;
-    padding-left: 20px;
-  }
-
-  .ai-chat-panel__composer {
-    --composer-height: 82px;
-  }
-
-  .ai-chat-panel__disclaimer {
-    padding-right: 92px;
-  }
-
-  .ai-chat-panel__welcome {
-    min-height: 360px;
-  }
-
-  .ai-chat-panel__welcome-icon {
-    width: 82px;
-    height: 82px;
+@media (max-width: 760px) {
+  .ai-chat-panel {
+    height: calc(100vh - 112px);
+    min-height: calc(100vh - 112px);
   }
 }
 </style>

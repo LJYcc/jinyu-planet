@@ -1,6 +1,6 @@
 # Task 7：AI Chat 页面与服务端适配器
 
-**描述：** 实现 `/ai-chat`、全站 AI 入口和不含供应商实现细节的服务端 AI 适配器。当前服务未配置时诚实呈现未连接/失败状态；千问接入时仅替换服务端适配器并读取环境变量。
+**描述：** 完成 `/ai-chat`、全站 AI 入口和供应商无关的服务端 AI 适配器基础。Task 9 在此基础上继续实现数据库会话、历史消息和流式回答。
 
 **验收标准：**
 
@@ -8,7 +8,7 @@
 - [x] AI 页面具备欢迎、建议问题、输入、用户消息、请求中、停止、新建会话、错误和重试状态。
 - [x] 聊天侧栏不展示“临时对话”或“仅保存在当前浏览器会话”等过渡性存储文案，为后续数据库接入保留界面空间。
 - [x] AI Chat 页面 Header 顶部保持透明，滚动后使用深色主题背景和浅色导航内容，避免浅色背景穿透聊天界面。
-- [x] 未配置 AI 服务时，`POST /api/ai/chat` 返回可辨识的未配置错误，界面不伪造模型回答；浏览器代码不含千问密钥。
+- [x] 未配置 AI 服务时，AI 服务边界返回可辨识的未配置错误，界面不伪造模型回答；浏览器代码不含千问密钥。
 
 **验证：**
 
@@ -22,7 +22,7 @@
 - `app/components/ai-chat/ai-assistant-fab.vue`
 - `app/pages/ai-chat.vue`
 - `app/components/ai-chat/ai-chat-panel.vue`
-- `server/api/ai/chat.post.ts`
-- `server/services/aiClient.ts`
+- `server/api/ai/`
+- `server/services/ai-client.ts`
 
 **预计范围：** 中等，5 个文件。

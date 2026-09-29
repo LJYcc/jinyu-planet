@@ -1,13 +1,5 @@
-import type { ApiSuccess } from '~/types/api';
-
-export type VisitorStatus = 'active' | 'blocked';
-
-export type VisitorIdentity = {
-  nickname: string;
-  status: VisitorStatus;
-};
-
-type VisitorResponse = ApiSuccess<VisitorIdentity>;
+import type { VisitorIdentity } from '~/types/visitor';
+import { bootstrapVisitor, updateVisitorNickname } from '~/services/visitor-api';
 
 export function useVisitor() {
   // useState 让同一次 Nuxt 应用生命周期内的组件共享访客身份。
@@ -19,9 +11,9 @@ export function useVisitor() {
     if (isLoading.value) return visitor.value;
     isLoading.value = true;
     try {
-      const response = await $fetch<VisitorResponse>('/api/visitors/bootstrap', { method: 'POST' });
+      const identity = await bootstrapVisitor();
       // Cookie 由浏览器自动保存，前端只需要保存可展示的公开身份。
-      visitor.value = response.data;
+      visitor.value = identity;
       return visitor.value;
     } finally {
       isLoading.value = false;
@@ -30,12 +22,9 @@ export function useVisitor() {
 
   async function changeNickname(nickname?: string) {
     // nickname 为空时让服务端生成新昵称；传字符串时由服务端校验后保存。
-    const response = await $fetch<VisitorResponse>('/api/visitors/nickname', {
-      method: 'PATCH',
-      body: nickname === undefined ? {} : { nickname }
-    });
+    const identity = await updateVisitorNickname(nickname);
     // 更新共享状态，让所有使用 useVisitor 的组件立即刷新显示。
-    visitor.value = response.data;
+    visitor.value = identity;
     return visitor.value;
   }
 

@@ -5,6 +5,7 @@ Noto
 nowrap
 Nuxt
 nuxtjs
+qwen
 rgba
 rowspan
 topbar
