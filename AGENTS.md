@@ -51,3 +51,33 @@
 ## Vue 模板命名约定
 
 Vue 模板中的所有组件标签统一使用小写 kebab-case，不使用 PascalCase 或大写标签名。例如使用 `<el-button>`、`<nuxt-link>`、`<post-list>` 和 `<arrow-left>`，不使用 `<ElButton>`、`<NuxtLink>`、`<PostList>` 或 `<ArrowLeft>`。Vue 模板格式严格遵循项目 Prettier 配置：多属性标签的属性逐行书写，结束 `>` 或 `/>` 独立成行；无属性或单属性自闭合标签保持单行。
+
+## 文件与目录命名约定
+
+新增或重命名的文件和目录统一使用 kebab-case（短横线命名），例如
+`ai-client.ts`、`ai-chat-repository.ts` 和 `ai-chat/`。Nuxt 路由文件保留框架要求的
+HTTP 方法后缀格式，例如 `index.post.ts`、`messages.get.ts`；业务名称部分仍使用 kebab-case。
+
+## 前端数据请求目录约定
+
+前端普通 API 请求统一放在 `app/services/`，页面和组件不直接重复编写 `$fetch`。
+
+### `app/services/`
+
+- 只负责调用 Nuxt API、组装请求参数和解包统一响应 `{ success, data, metadata }`。
+- 不保存 Vue 响应式状态，不负责页面 loading、错误文案、弹窗或列表更新。
+- 按业务领域命名，例如 `ai-conversation-api.ts`、`post-api.ts`、`topic-api.ts`、`visitor-api.ts`。
+- 需要被多个页面或 composable 使用的请求优先放在这里，避免在页面中复制接口路径和响应解析逻辑。
+
+### `app/composables/`
+
+- 负责 `ref`、`computed`、`useState` 等响应式状态和页面业务流程。
+- 通过 `app/services/` 调用 API，再把结果转换成页面需要的状态。
+- 例如 `useVisitor.ts` 管理匿名访客共享状态，`useHomeData.ts` 管理首页加载状态和数据组合。
+
+### 页面与组件
+
+- `app/pages/` 和 `app/components/` 负责界面展示、用户交互和事件协调，不直接调用普通 API。
+- 业务数据更新由拥有状态的父组件或 composable 统一处理，子组件通过 props 和 emits 协作。
+- AI 流式请求也必须从 `app/services/` 发起；由于需要读取 `Response.body.getReader()`，service 可以返回原始 `Response`，不能强制解包为 JSON。
+- AI 流式响应的片段解析、打字机效果和页面消息状态由 composable 或控制器负责，不能把响应式状态放进 service。

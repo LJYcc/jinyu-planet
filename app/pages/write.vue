@@ -6,7 +6,8 @@ import writeHeroBg from '~/assets/images/bg-write-desk-dawn-hero.png';
 import writeBottomBg from '~/assets/images/bg-night-mountain-stars.png';
 import ArticleContent from '~/components/posts/article-content.vue';
 import PostEditor from '~/components/posts/post-editor.vue';
-import type { ApiSuccess } from '~/types/api';
+import { createPost } from '~/services/post-api';
+import { listTopics } from '~/services/topic-api';
 import type { PublicTopic } from '~/types/post';
 
 type PostType = 'article' | 'short' | 'photo' | 'link';
@@ -175,8 +176,8 @@ function openPreview() {
 async function loadWriteData() {
   loadError.value = '';
   try {
-    const [topicResponse] = await Promise.all([$fetch<ApiSuccess<PublicTopic[]>>('/api/topics'), bootstrap()]);
-    topics.value = topicResponse.data;
+    const [topicsData] = await Promise.all([listTopics(), bootstrap()]);
+    topics.value = topicsData;
     if (!form.topic && topics.value[0]) form.topic = topics.value[0].slug;
   } catch {
     loadError.value = '无法连接星球服务，请刷新页面后重试。';
@@ -202,22 +203,19 @@ async function publishPost() {
   isSubmitting.value = true;
   publishError.value = '';
   try {
-    const response = await $fetch<ApiSuccess<{ slug: string }, { created: boolean }>>('/api/posts', {
-      method: 'POST',
-      body: {
-        type: form.type,
-        topic: form.topic,
-        title: form.type === 'short' ? '' : form.title,
-        contentHtml: form.contentHtml,
-        externalUrl: form.type === 'link' ? form.externalUrl : '',
-        tags: form.tags,
-        clientNonce: form.clientNonce
-      }
+    const result = await createPost({
+      type: form.type,
+      topic: form.topic,
+      title: form.type === 'short' ? '' : form.title,
+      contentHtml: form.contentHtml,
+      externalUrl: form.type === 'link' ? form.externalUrl : '',
+      tags: form.tags,
+      clientNonce: form.clientNonce
     });
-    publishedSlug.value = response.data.slug;
+    publishedSlug.value = result.slug;
     isDirty.value = false;
     localStorage.removeItem(DRAFT_STORAGE_KEY);
-    ElMessage.success(response.metadata?.created ? '信号已投递到金鱼星球。' : '这条信号已经投递成功。');
+    ElMessage.success(result.created ? '信号已投递到金鱼星球。' : '这条信号已经投递成功。');
   } catch (error: unknown) {
     const status = (error as { response?: { status?: number } }).response?.status;
     publishError.value = status === 429 ? '投递过于频繁，请稍后再试。' : '投递失败，请检查内容后重试。';

@@ -7,8 +7,9 @@
 - UI 组件统一使用 Element Plus，并通过 `@element-plus/nuxt` 接入；主题色使用项目定义的暖金色，不使用默认蓝色。
 - Header 从页面加载开始固定在顶部：首页首屏使用透明深色模式，滚动或进入非首页路由后使用浅色背景和深色 Logo/文字；横向菜单不显示默认下划线。
 - 桌面端显示主导航和发帖 CTA；移动端不提供折叠菜单按钮，核心跳转由页面内容入口完成。
-- Logo、图标和 favicon 使用 `app/assets/logo/` 中的资源；UI 参考图使用 `app/assets/ui/`，中文使用本地 Noto Sans SC，首页英文展示文字使用本地 Source Sans 3。
+- Logo、图标和 favicon 使用 `app/assets/logo/` 与 `public/` 中的本地资源；当前采用未来科技方向的抽象金鱼、行星、轨道和信号节点标记，组合 Logo 使用 `goldfish-planet-logo-tech.png` 与 `goldfish-planet-logo-light-tech.png`，独立图标使用 `goldfish-planet-icon-tech.png`，favicon 使用 `public/favicon-goldfish-planet-tech.ico`。组合 Logo 保留科技版图案，中文与英文文字参照 `goldfish-planet-logo-light-imagegen-v6.png` 的圆润粗体风格，不使用中间黄色横线，保持图案原始宽高比，图标可见高度明显高于文字并控制透明画布留白；UI 参考图使用 `app/assets/ui/`，中文使用本地 Noto Sans SC，首页英文展示文字使用本地 Source Sans 3。
 - Vue 文件的局部样式使用 `<style scoped lang="scss">`；全局 CSS 只保留 reset、token、字体入口、容器和通用工具类。首页、Header、Footer 和布局专属样式分别放回所属文件。
+- 浏览器端首页和访客 API 请求封装在 `app/services/`，`useHomeData` 与 `useVisitor` 负责状态和页面流程，不在页面中重复编写 `$fetch`。
 
 **验收标准：**
 
@@ -45,7 +46,7 @@
 - `app/assets/css/tokens.css`
 - `app/assets/logo/`
 - `public/fonts/`
-- `public/favicon.ico`
+- `public/favicon-goldfish-planet-tech.ico`
 - `nuxt.config.ts`
 
 **预计范围：** 中等，涉及公共壳层、首页页面、占位页面、主题资源和样式分层。

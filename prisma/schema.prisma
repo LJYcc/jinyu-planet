@@ -26,6 +26,11 @@ enum PostStatus {
   hidden
 }
 
+enum AiMessageRole {
+  user
+  assistant
+}
+
 // 不登录的访问者也需要稳定身份，供发帖归属和会话校验使用。
 model AnonymousVisitor {
   id         String           @id @default(uuid()) @db.Char(36)
@@ -35,6 +40,7 @@ model AnonymousVisitor {
   lastSeenAt DateTime         @default(now()) @map("last_seen_at")
   sessions   VisitorSession[]
   posts      Post[]
+  aiConversations AiConversation[]
 
   @@map("anonymous_visitors")
 }
@@ -145,4 +151,39 @@ model PostImage {
 
   @@index([postId, sortOrder])
   @@map("post_images")
+}
+
+// 一段 AI 对话属于一个匿名访客；访客可以创建多个相互独立的会话。
+model AiConversation {
+  id        String   @id @default(uuid()) @db.Char(36)
+  visitorId String   @map("visitor_id") @db.Char(36)
+  title     String?  @db.VarChar(160)
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  visitor  AnonymousVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([visitorId, isPinned, updatedAt])
+  @@map("ai_conversations")
+}
+
+// 只保存 user 和 assistant 消息；system prompt 由服务端在调用模型时生成。
+model AiMessage {
+  id             String        @id @default(uuid()) @db.Char(36)
+  conversationId String        @map("conversation_id") @db.Char(36)
+  role           AiMessageRole
+  content        String        @db.LongText
+  reasoningContent String?      @map("reasoning_content") @db.LongText
+  reasoningDurationMs Int?      @map("reasoning_duration_ms")
+  clientNonce    String?       @map("client_nonce") @db.Char(36)
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // user 消息使用 nonce 幂等；assistant 消息的 nonce 为空，MySQL 允许多个 NULL。
+  @@unique([conversationId, clientNonce])
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
 }

@@ -26,6 +26,13 @@
 - [x] Task 7: AI Chat 页面与服务端适配器
 - [ ] Task 8: 响应式、可访问性、SEO 与发布质量
 
+## Phase 4：AI Chat 会话与流式服务
+
+- [x] Task 9 前置阶段：千问 Chat 服务端直连
+- [x] Task 9 Phase 6.1：KaTeX、Mermaid 与 TOML 富内容展示
+- [ ] Task 9 Phase 6.2：千问深度思考与最终答案分离展示
+- [ ] Task 9：会话、历史、流式回答、前端状态与分阶段高级 AI 能力
+
 ## Checkpoint：首版完成
 
 - [ ] 全部验收标准和发布前安全检查完成。

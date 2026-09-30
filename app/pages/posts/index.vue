@@ -5,7 +5,8 @@ import sideTopicImage from '~/assets/images/bg-night-mountain-stars.png';
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
 import PostList from '~/components/posts/post-list.vue';
-import type { ApiSuccess } from '~/types/api';
+import { listPosts } from '~/services/post-api';
+import { listTopics } from '~/services/topic-api';
 import type { PostListItem, PostsPage, PublicTopic } from '~/types/post';
 import { postDisplayExcerpt, postDisplayTitle } from '~/utils/postDisplay';
 
@@ -24,7 +25,7 @@ const isFirstLoad = ref(true);
 const pageSize = 6;
 
 const heroPost = computed(() => pageData.value?.items[0] ?? null);
-const listPosts = computed(() => pageData.value?.items.slice(1) ?? []);
+const visiblePosts = computed(() => pageData.value?.items.slice(1) ?? []);
 const heroSectionLabel = computed(() => (selectedSort.value === 'featured' ? '精选信号' : '最新抵达'));
 const heroLabel = computed(() => (selectedSort.value === 'featured' ? '精选' : '最新'));
 const listLabel = computed(() => (selectedSort.value === 'featured' ? '更多精选' : '最新信号'));
@@ -55,17 +56,13 @@ async function loadPosts() {
   isLoading.value = true;
   loadError.value = '';
   try {
-    const response = await $fetch<ApiSuccess<PostListItem[], Omit<PostsPage, 'items'>>>('/api/posts', {
-      query: {
-        topic: selectedTopic.value || undefined,
-        q: keyword.value.trim() || undefined,
-        sort: selectedSort.value,
-        page: currentPage.value,
-        pageSize
-      }
+    pageData.value = await listPosts({
+      topic: selectedTopic.value || undefined,
+      q: keyword.value.trim() || undefined,
+      sort: selectedSort.value,
+      page: currentPage.value,
+      pageSize
     });
-    if (!response.metadata) throw new Error('Posts response is missing pagination metadata.');
-    pageData.value = { items: response.data, ...response.metadata };
   } catch {
     pageData.value = null;
     loadError.value = '星球信号暂时无法读取，请稍后再试。';
@@ -77,8 +74,7 @@ async function loadPosts() {
 
 async function loadTopics() {
   try {
-    const response = await $fetch<ApiSuccess<PublicTopic[]>>('/api/topics');
-    topics.value = response.data;
+    topics.value = await listTopics();
   } catch {
     topics.value = [];
   }
@@ -298,14 +294,14 @@ watch(
             </nuxt-link>
           </section>
           <section
-            v-if="listPosts.length"
+            v-if="visiblePosts.length"
             class="posts-list-section"
             :aria-label="listLabel"
           >
             <div class="posts-section-head">
               <h2>{{ listLabel }}</h2>
             </div>
-            <post-list :posts="listPosts" />
+            <post-list :posts="visiblePosts" />
           </section>
           <nav
             v-if="pageData.totalPages > 1"

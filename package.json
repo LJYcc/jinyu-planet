@@ -21,8 +21,15 @@
     "@prisma/client": "^7.10.0",
     "@wangeditor-next/editor": "^6.4.2",
     "@wangeditor-next/editor-for-vue": "^6.4.2",
+    "highlight.js": "^11.12.0",
+    "katex": "^0.18.9",
+    "markdown-it": "^15.0.2",
+    "markdown-it-katex": "^2.0.3",
+    "mermaid": "^12.0.0",
+    "moment": "^2.31.0",
     "nuxt": "^4.5.2",
     "ultrahtml": "^1.7.0",
+    "uuid": "^14.0.2",
     "vue": "^3.5.42",
     "vue-router": "^5.3.1"
   },
@@ -33,6 +40,7 @@
     "@element-plus/nuxt": "^1.1.5",
     "@nuxt/eslint": "^1.17.0",
     "@nuxtjs/tailwindcss": "^6.14.0",
+    "@types/markdown-it": "^14.2.0",
     "cspell": "^10.3.3",
     "dotenv": "^18.0.0",
     "eslint": "^10.10.0",
@@ -41,7 +49,6 @@
     "lint-staged": "^17.5.1",
     "prettier": "^3.9.8",
     "prisma": "^7.10.0",
-    "sass": "^1.104.1",
-    "uuid": "^14.0.2"
+    "sass": "^1.104.1"
   }
 }
