@@ -5,7 +5,7 @@ import detailCtaBg from '~/assets/images/bg-night-mountain-stars.png';
 import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import ArticleContent from '~/components/posts/article-content.vue';
-import type { ApiSuccess } from '~/types/api';
+import { getPostDetail } from '~/services/post-api';
 import type { PostDetail, PostListItem } from '~/types/post';
 import { postDisplayExcerpt, postDisplayTitle } from '~/utils/postDisplay';
 
@@ -42,8 +42,7 @@ async function loadPost() {
   isNotFound.value = false;
   post.value = null;
   try {
-    const response = await $fetch<ApiSuccess<PostDetail>>(`/api/posts/${encodeURIComponent(slug)}`);
-    post.value = response.data;
+    post.value = await getPostDetail(slug);
   } catch (error: unknown) {
     const status =
       (error as { response?: { status?: number }; statusCode?: number }).response?.status ??

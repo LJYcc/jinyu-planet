@@ -20,6 +20,10 @@ const protectedRoutes: ProtectedRoute[] = [
 
 /** 判断当前请求是否属于需要匿名会话的受保护路由。 */
 function isProtectedRoute(method: string, path: string) {
+  if (path === '/api/ai/conversations' || path.startsWith('/api/ai/conversations/')) {
+    return true;
+  }
+
   return protectedRoutes.some(route => route.method === method && route.path === path);
 }
 

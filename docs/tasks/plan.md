@@ -2,7 +2,7 @@
 
 ## 概览
 
-金鱼星球首版采用 MySQL、Prisma 和 Nuxt 服务端 API，但不做登录。访客以服务端签发的匿名会话 Cookie 身份浏览和发帖；前端只负责显示随机昵称，不拥有可伪造的作者 ID。页面包含首页、广场、详情、wangEditor 发帖和 AI Chat；千问仅在后续通过服务端代理接入。
+金鱼星球采用 MySQL、Prisma 和 Nuxt 服务端 API，但不做登录。访客以服务端签发的匿名会话 Cookie 身份浏览和发帖；前端只负责显示随机昵称，不拥有可伪造的作者 ID。页面包含首页、广场、详情、wangEditor 发帖和 AI Chat。AI Chat 先完成匿名会话历史与流式千问回答，再在后续迭代接入站内知识检索和受控工具。
 
 数据库表、关系和 PostgreSQL SQL 见 [`../数据库表设计.md`](../数据库表设计.md)。任务总清单见 `todo.md`。
 
@@ -16,6 +16,7 @@
 - 匿名会话用随机令牌的 HttpOnly Cookie 加服务端哈希存储实现，不引入注册或登录。
 - 帖子正文保存为消毒后的 wangEditor HTML，同时派生纯文本、摘要和阅读时长；列表/详情都从 API 读取。
 - 图片上传和千问 API 需独立服务端接口，但分别在对应功能接入时实施。
+- AI 服务采用分层演进：Task 9 只负责千问直连；站内帖子问答使用 RAG 检索边界；需要执行查询或写入动作时再引入白名单工具和有限循环的 Agent，不把项目数据简单拼进永久 system prompt。
 - 生产环境默认公开匿名发帖前，必须配置限流和内容策略；表结构已预留 `pending`、`published`、`hidden` 状态。
 
 ## 依赖图
@@ -29,7 +30,8 @@ Task 1: 数据库连接与迁移
               └─> Task 6: wangEditor 发帖 API 与页面
 
 Task 4 ─> Task 7: AI Chat 页面与服务端适配器
-Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
+Task 7 ─> Task 9: AI Chat 会话、历史与流式服务
+Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 ```
 
 ## 任务顺序
@@ -61,6 +63,13 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 - [x] Task 7: [AI Chat 页面与服务端适配器](task-07-ai-chat.md)
 - [ ] Task 8: [响应式、可访问性、SEO 与发布质量](task-08-quality-pass.md)
 
+### Phase 4：AI Chat 会话与流式服务
+
+- [x] Task 9 前置阶段：千问 Chat 服务端直连
+- [x] Task 9 Phase 6.1：KaTeX、Mermaid 与 TOML 富内容展示
+- [ ] Task 9 Phase 6.2：千问深度思考与最终答案分离展示
+- [ ] Task 9 Phase 1-6：会话、历史、流式回答、前端状态与分阶段高级 AI 能力（[任务说明](task-09-qwen-chat-service.md)）
+
 ### Checkpoint：首版完成
 
 - [ ] 所有任务的验收项已完成。
@@ -74,11 +83,12 @@ Task 4 + Task 5 + Task 6 + Task 7 ─> Task 8: 发布质量检查
 | 开发库连接串或权限配置错误 | 高   | 仅在本地开发数据库运行 `migrate dev`；先执行 `prisma validate`，生产环境只用 `migrate deploy`。 |
 | 匿名发布被滥用             | 高   | HttpOnly 会话、发布限流、服务端消毒和状态字段；上线前确定审核策略。                             |
 | wangEditor 与 SSR 不兼容   | 高   | 只在客户端挂载，离开页面时销毁，并在 Task 6 早期构建验证。                                      |
-| AI Key 暴露                | 高   | 仅在 `server/api/ai/chat` 读取环境变量，浏览器不直接请求千问。                                  |
+| AI Key 暴露                | 高   | 仅在 `server/services/ai-client.ts` 读取环境变量，浏览器不直接请求千问。                        |
 | 中文搜索质量有限           | 中   | 初版使用 `pg_trgm`；需求增长后再接中文分词或搜索服务。                                          |
 
 ## 待确认
 
 - 匿名帖子首版直接公开，还是先写入 `pending`。
 - 对象存储的上传签名/公开 URL 规则。
-- 千问模型、流式响应方案、额度与超时策略。
+- 千问模型、额度、超时和错误重试策略。
+- 站内知识问答、来源引用和 Agent 工具调用属于 Task 9 之后的迭代。

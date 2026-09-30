@@ -1,7 +1,8 @@
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
-import type { ApiSuccess } from '~/types/api';
-import type { PostListItem, PostsPage, PublicTopic } from '~/types/post';
+import { listFeaturedPosts, listPosts } from '~/services/post-api';
+import { listTopics } from '~/services/topic-api';
+import type { PostListItem, PublicTopic } from '~/types/post';
 
 export function useHomeData() {
   const posts = ref<PostListItem[]>([]);
@@ -28,14 +29,14 @@ export function useHomeData() {
     isLoading.value = true;
     loadError.value = '';
     try {
-      const [postPage, featuredResponse, topicResponse] = await Promise.all([
-        $fetch<ApiSuccess<PostListItem[], Omit<PostsPage, 'items'>>>('/api/posts', { query: { page: 1, pageSize: 6 } }),
-        $fetch<ApiSuccess<PostListItem[]>>('/api/posts/featured'),
-        $fetch<ApiSuccess<PublicTopic[]>>('/api/topics')
+      const [postPage, featuredPostsData, topicsData] = await Promise.all([
+        listPosts({ page: 1, pageSize: 6 }),
+        listFeaturedPosts(),
+        listTopics()
       ]);
-      posts.value = postPage.data;
-      featuredPosts.value = featuredResponse.data;
-      topics.value = topicResponse.data;
+      posts.value = postPage.items;
+      featuredPosts.value = featuredPostsData;
+      topics.value = topicsData;
     } catch {
       loadError.value = '暂时没有连上星球信号，请稍后再试。';
     } finally {

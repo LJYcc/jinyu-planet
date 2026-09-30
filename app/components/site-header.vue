@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Search } from '@element-plus/icons-vue';
-import logoDark from '~/assets/logo/goldfish-planet-logo.png';
-import logoLight from '~/assets/logo/goldfish-planet-logo-light.png';
+import logoDark from '~/assets/logo/goldfish-planet-logo-tech.png';
+import logoLight from '~/assets/logo/goldfish-planet-logo-light-tech.png';
 
 const route = useRoute();
 const isScrolled = ref(false);

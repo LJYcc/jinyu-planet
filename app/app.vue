@@ -7,8 +7,9 @@
 <script setup lang="ts">
 import '~/assets/css/main.css';
 import '~/assets/css/responsive.css';
+import 'katex/dist/katex.min.css';
 
 useHead({
-  link: [{ rel: 'icon', href: '/favicon.ico?v=2', type: 'image/x-icon' }]
+  link: [{ rel: 'icon', href: '/favicon-goldfish-planet-tech.ico?v=1', type: 'image/x-icon' }]
 });
 </script>

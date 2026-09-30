@@ -18,6 +18,11 @@ logs
 .fleet
 .idea
 
+# Local visual verification artifacts
+ai-chat-*-check.png
+.tmp-ai-chat-*.png
+_tmp-chrome-profile*/
+
 # Local env files
 .env
 .env.*
