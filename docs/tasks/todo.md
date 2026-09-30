@@ -29,7 +29,8 @@
 ## Phase 4：AI Chat 会话与流式服务
 
 - [x] Task 9 前置阶段：千问 Chat 服务端直连
-- [ ] Task 9：会话、历史、流式回答与前端状态
+- [x] Task 9 Phase 6.1：KaTeX、Mermaid 与 TOML 富内容展示
+- [ ] Task 9：会话、历史、流式回答、前端状态与分阶段高级 AI 能力
 
 ## Checkpoint：首版完成
 

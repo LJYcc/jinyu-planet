@@ -1,4 +1,6 @@
 commitlint
+Katex
+linkify
 noopener
 noreferrer
 Noto

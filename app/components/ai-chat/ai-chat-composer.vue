@@ -6,6 +6,7 @@ import { Promotion, VideoPause } from '@element-plus/icons-vue';
 const props = defineProps<{
   modelValue: string;
   isSending: boolean;
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -20,7 +21,7 @@ const input = computed({
 });
 
 function sendMessage() {
-  if (input.value.trim()) emit('send');
+  if (!props.disabled && input.value.trim()) emit('send');
 }
 
 function handleComposerKeydown(event: Event) {
@@ -45,12 +46,13 @@ function handleComposerKeydown(event: Event) {
         maxlength="4000"
         placeholder="给 AI 助理发消息..."
         aria-label="聊天内容"
-        :disabled="isSending"
+        :disabled="isSending || props.disabled"
         @keydown="handleComposerKeydown"
       />
       <el-button
         v-if="isSending"
-        class="ai-chat-composer__action"
+        class="ai-chat-composer__action ai-chat-composer__action--stop"
+        type="danger"
         :icon="VideoPause"
         aria-label="停止生成"
         @click="emit('stop')"
@@ -61,7 +63,7 @@ function handleComposerKeydown(event: Event) {
         type="primary"
         native-type="submit"
         :icon="Promotion"
-        :disabled="!input.trim()"
+        :disabled="props.disabled || !input.trim()"
         aria-label="发送消息"
       />
     </form>
@@ -107,6 +109,10 @@ function handleComposerKeydown(event: Event) {
   border-radius: 50%;
 }
 
+.ai-chat-composer :deep(.ai-chat-composer__action .el-icon) {
+  font-size: 19px;
+}
+
 .ai-chat-composer :deep(.el-textarea__inner) {
   height: 100% !important;
   min-height: 0 !important;
@@ -127,10 +133,26 @@ function handleComposerKeydown(event: Event) {
   box-shadow: none;
 }
 
-.ai-chat-composer :deep(.el-button:not(.el-button--primary)) {
+.ai-chat-composer :deep(.el-button--default) {
   border-color: rgba(229, 241, 233, 0.62);
   color: #f4f7f1;
   background: transparent;
+}
+
+.ai-chat-composer :deep(.ai-chat-composer__action--stop.el-button--danger) {
+  border-color: var(--el-color-danger);
+  color: #fff;
+  background: var(--el-color-danger);
+}
+
+.ai-chat-composer :deep(.ai-chat-composer__action--stop.el-button--danger:hover) {
+  border-color: var(--el-color-danger-light-3);
+  background: var(--el-color-danger-light-3);
+}
+
+.ai-chat-composer :deep(.ai-chat-composer__action--stop.el-button--danger:focus-visible) {
+  outline: 2px solid var(--el-color-danger-light-5);
+  outline-offset: 2px;
 }
 
 .ai-chat-composer__disclaimer {

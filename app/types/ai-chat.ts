@@ -1,9 +1,20 @@
 export type ChatRole = 'user' | 'assistant';
 
+export type AiMessageContentPart =
+  | {
+      type: 'text';
+      text: string;
+    }
+  | {
+      type: 'markdown';
+      markdown: string;
+    };
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  contentParts?: AiMessageContentPart[];
   createdAt?: string;
 };
 

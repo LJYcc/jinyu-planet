@@ -36,12 +36,14 @@ const messages = ref<ChatMessage[]>([]);
 const conversations = ref<Conversation[]>([]);
 const conversationId = ref<string>();
 const input = ref('');
+const isLoadingConversations = ref(true);
 const isLoadingHistory = ref(false);
 const isSending = ref(false);
 const requestError = ref('');
 const lastFailedMessage = ref('');
 const lastFailedNonce = ref('');
 const typingMessageId = ref<string>();
+const loadingConversationTitle = ref<string>();
 const isSidebarCollapsed = ref(false);
 let abortController: AbortController | undefined;
 let requestSequence = 0;
@@ -54,10 +56,16 @@ const currentConversation = computed(() => {
 const conversationTitle = computed(() => {
   return currentConversation.value?.title || '新对话';
 });
+const hasConversationQuery = computed(() => {
+  return route.query.conversation !== undefined;
+});
+const isLoadingContent = computed(() => {
+  return isLoadingHistory.value || (isLoadingConversations.value && hasConversationQuery.value);
+});
 
 // 没有会话 ID 且消息列表为空，表示访客正处于延迟创建的新对话状态。
 const isNewConversation = computed(() => {
-  return !conversationId.value && messages.value.length === 0;
+  return !isLoadingContent.value && !conversationId.value && messages.value.length === 0;
 });
 
 /** 创建一个带前端 ID 的消息对象，用于立即更新消息列表。 */
@@ -98,8 +106,9 @@ function setConversationId(id?: string) {
 }
 
 /** 读取指定历史会话的消息，并将其设为当前会话。 */
-async function loadConversation(id: string) {
+async function loadConversation(id: string, title?: string) {
   isLoadingHistory.value = true;
+  loadingConversationTitle.value = title;
   requestError.value = '';
   try {
     const conversationMessages = await listAiConversationMessages(id);
@@ -111,6 +120,7 @@ async function loadConversation(id: string) {
     return false;
   } finally {
     isLoadingHistory.value = false;
+    loadingConversationTitle.value = undefined;
   }
 }
 
@@ -120,10 +130,18 @@ function getConversationIdFromQuery() {
   return typeof conversation === 'string' ? conversation : undefined;
 }
 
-/** 读取分享链接成功后移除会话参数，避免刷新时重复触发 URL 定位流程。 */
-async function clearConversationQuery() {
+/** 同步当前会话到地址栏；没有会话时恢复为新对话地址。 */
+async function updateConversationQuery(id?: string) {
   const nextQuery = { ...route.query };
-  delete nextQuery.conversation;
+  if (id) {
+    nextQuery.conversation = id;
+  } else {
+    delete nextQuery.conversation;
+  }
+
+  if (route.query.conversation === id) {
+    return;
+  }
 
   await router.replace({
     path: route.path,
@@ -135,24 +153,34 @@ async function clearConversationQuery() {
 /**
  * 初始化会话列表。
  *
- * 普通进入页面时展示新对话；从分享链接进入且会话属于当前匿名访客时，
- * 读取该会话的历史消息。归属校验仍由会话列表和服务端接口共同保障。
+ * 访问带会话参数的地址且会话属于当前匿名访客时，读取该会话的历史消息；
+ * 不存在、格式不正确或无权访问的会话参数会被移除，并回到新对话。归属校验仍由会话列表和服务端接口共同保障。
  */
 async function loadConversations() {
-  conversations.value = await listAiConversations();
-  messages.value = [];
-  setConversationId();
+  let requestedConversationId: string | undefined;
+  let requestedConversation: Conversation | undefined;
 
-  const requestedConversationId = getConversationIdFromQuery();
-  const hasRequestedConversation = conversations.value.some(conversation => {
-    return conversation.id === requestedConversationId;
-  });
+  isLoadingConversations.value = true;
+  try {
+    conversations.value = await listAiConversations();
+    messages.value = [];
+    setConversationId();
 
-  if (requestedConversationId && hasRequestedConversation) {
-    const hasLoadedConversation = await loadConversation(requestedConversationId);
-    if (hasLoadedConversation) {
-      await clearConversationQuery();
-    }
+    requestedConversationId = getConversationIdFromQuery();
+    requestedConversation = conversations.value.find(conversation => {
+      return conversation.id === requestedConversationId;
+    });
+  } finally {
+    isLoadingConversations.value = false;
+  }
+
+  if (requestedConversationId && requestedConversation) {
+    await loadConversation(requestedConversationId, requestedConversation.title || '新对话');
+    return;
+  }
+
+  if (hasConversationQuery.value) {
+    await updateConversationQuery();
   }
 }
 
@@ -166,6 +194,7 @@ async function ensureConversation() {
   const conversation = await createAiConversation();
   conversations.value = [conversation, ...conversations.value];
   setConversationId(conversation.id);
+  await updateConversationQuery(conversation.id);
   return conversation.id;
 }
 
@@ -280,7 +309,7 @@ async function removeSelectedConversations(conversationIds: string[]) {
       return !conversationIds.includes(conversation.id);
     });
     if (conversationId.value && conversationIds.includes(conversationId.value)) {
-      startNewConversation();
+      await startNewConversation();
     }
     ElMessage.success('选中的会话已删除。');
   } catch (error) {
@@ -495,7 +524,7 @@ function stopGenerating() {
 }
 
 /** 清空当前页面并进入未保存的新对话状态。 */
-function startNewConversation() {
+async function startNewConversation() {
   requestSequence += 1;
   stopGenerating();
   isSending.value = false;
@@ -506,6 +535,18 @@ function startNewConversation() {
   lastFailedNonce.value = '';
   typingMessageId.value = undefined;
   setConversationId();
+  await updateConversationQuery();
+}
+
+/** 切换历史会话成功后，将当前会话 ID 保留在地址栏，刷新时可恢复该会话。 */
+async function selectConversation(id: string) {
+  const conversation = conversations.value.find(item => {
+    return item.id === id;
+  });
+  const hasLoadedConversation = await loadConversation(id, conversation?.title || '新对话');
+  if (hasLoadedConversation) {
+    await updateConversationQuery(id);
+  }
 }
 
 /** 确认并删除单个会话，删除当前会话后回到新对话页面。 */
@@ -522,7 +563,7 @@ async function deleteConversation(conversation: Conversation) {
     });
 
     if (conversation.id === conversationId.value) {
-      startNewConversation();
+      await startNewConversation();
     }
 
     ElMessage.success('会话已删除。');
@@ -559,11 +600,12 @@ onBeforeUnmount(stopGenerating);
     <ai-conversation-sidebar
       :conversations="conversations"
       :active-conversation-id="conversationId"
-      :disabled="isSending || isLoadingHistory"
+      :disabled="isSending || isLoadingConversations || isLoadingHistory"
+      :is-loading="isLoadingConversations"
       :collapsed="isSidebarCollapsed"
       :visitor-nickname="visitor?.nickname || '匿名访客'"
       @create="startNewConversation"
-      @select="loadConversation"
+      @select="selectConversation"
       @remove="deleteConversation"
       @rename="renameConversation"
       @toggle-pin="togglePinConversation"
@@ -578,6 +620,7 @@ onBeforeUnmount(stopGenerating);
         v-if="isNewConversation"
         v-model="input"
         :is-sending="isSending"
+        :disabled="isLoadingConversations"
         :request-error="requestError"
         :can-retry="Boolean(lastFailedMessage)"
         @send="sendMessage"
@@ -589,6 +632,9 @@ onBeforeUnmount(stopGenerating);
         <ai-chat-content
           :conversation-title="conversationTitle"
           :messages="messages"
+          :is-loading-conversations="isLoadingConversations"
+          :is-loading-content="isLoadingContent"
+          :loading-conversation-title="loadingConversationTitle"
           :is-sending="isSending"
           :request-error="requestError"
           :can-retry="Boolean(lastFailedMessage)"
@@ -599,6 +645,7 @@ onBeforeUnmount(stopGenerating);
         <ai-chat-composer
           v-model="input"
           :is-sending="isSending"
+          :disabled="isLoadingConversations || isLoadingHistory"
           @send="sendMessage"
           @stop="stopGenerating"
         />
@@ -610,8 +657,8 @@ onBeforeUnmount(stopGenerating);
 <style scoped lang="scss">
 .ai-chat-panel {
   display: grid;
-  height: calc(100vh - 128px);
-  min-height: calc(100vh - 128px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   color: #f6f7f0;
   gap: 5px;
@@ -643,13 +690,6 @@ onBeforeUnmount(stopGenerating);
 
   .ai-chat-panel--sidebar-collapsed {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .ai-chat-panel {
-    height: calc(100vh - 112px);
-    min-height: calc(100vh - 112px);
   }
 }
 </style>

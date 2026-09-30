@@ -10,6 +10,7 @@ const props = defineProps<{
   conversations: Conversation[];
   activeConversationId?: string;
   disabled: boolean;
+  isLoading: boolean;
   collapsed: boolean;
   visitorNickname: string;
 }>();
@@ -274,11 +275,17 @@ onBeforeUnmount(() => {
       v-if="!props.collapsed"
       class="ai-conversation-sidebar__header"
     >
-      <img
-        :src="logoLight"
-        class="ai-conversation-sidebar__logo"
-        alt="金鱼星球"
-      />
+      <nuxt-link
+        to="/"
+        class="ai-conversation-sidebar__brand"
+        aria-label="返回金鱼星球首页"
+      >
+        <img
+          :src="logoLight"
+          class="ai-conversation-sidebar__logo"
+          alt="金鱼星球"
+        />
+      </nuxt-link>
       <el-tooltip
         content="折叠侧边栏"
         placement="top"
@@ -367,8 +374,21 @@ onBeforeUnmount(() => {
           class="ai-conversation-sidebar__list"
           @scroll="handleHistoryScroll"
         >
+          <div
+            v-if="props.isLoading"
+            class="ai-conversation-sidebar__loading"
+            role="status"
+            aria-label="正在加载历史会话"
+          >
+            <el-skeleton
+              :rows="6"
+              style="--el-skeleton-color: rgba(203, 223, 211, 0.1); --el-skeleton-to-color: rgba(203, 223, 211, 0.18)"
+              animated
+            />
+          </div>
           <template
             v-for="group in conversationGroups"
+            v-else
             :key="group.label"
           >
             <div class="ai-conversation-sidebar__group-heading">{{ group.label }}</div>
@@ -543,6 +563,17 @@ onBeforeUnmount(() => {
   object-position: left center;
 }
 
+.ai-conversation-sidebar__brand {
+  display: block;
+  min-width: 0;
+  border-radius: 6px;
+}
+
+.ai-conversation-sidebar__brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .ai-conversation-sidebar__header :deep(.el-button) {
   width: 32px;
   height: 32px;
@@ -675,6 +706,10 @@ onBeforeUnmount(() => {
 
 .ai-conversation-sidebar__list::-webkit-scrollbar {
   display: none;
+}
+
+.ai-conversation-sidebar__loading {
+  padding: 10px 6px;
 }
 
 .ai-conversation-sidebar__scrollbar {

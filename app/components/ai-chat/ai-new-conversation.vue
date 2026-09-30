@@ -12,6 +12,7 @@ import AiChatComposer from '~/components/ai-chat/ai-chat-composer.vue';
 const props = defineProps<{
   modelValue: string;
   isSending: boolean;
+  disabled?: boolean;
   requestError: string;
   canRetry: boolean;
 }>();
@@ -50,6 +51,7 @@ const suggestions = [
         <ai-chat-composer
           :model-value="props.modelValue"
           :is-sending="props.isSending"
+          :disabled="props.disabled"
           @update:model-value="emit('update:modelValue', $event)"
           @send="emit('send')"
           @stop="emit('stop')"
@@ -62,6 +64,7 @@ const suggestions = [
           :key="suggestion.text"
           :icon="suggestion.icon"
           plain
+          :disabled="props.disabled"
           @click="emit('useSuggestion', suggestion.text)"
         >
           {{ suggestion.text }}

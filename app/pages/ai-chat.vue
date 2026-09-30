@@ -2,7 +2,10 @@
 import chatBackground from '~/assets/images/bg-ai-chat-star-valley-hero-v8.png';
 import AiChatPanel from '~/components/ai-chat/ai-chat-panel.vue';
 
+definePageMeta({ layout: false });
+
 useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任何问题。' });
+useHead({ bodyAttrs: { class: 'ai-chat-page-body' } });
 </script>
 
 <template>
@@ -20,28 +23,30 @@ useSeoMeta({ title: 'AI 助理 | 金鱼星球', description: '和 AI 聊聊任�
 
 <style scoped lang="scss">
 .ai-chat-page {
-  min-height: 100vh;
-  padding: 96px 0 32px;
+  box-sizing: border-box;
+  height: 100vh;
+  height: 100dvh;
+  padding: 16px;
+  overflow: hidden;
   background-color: var(--night);
   background-position: center;
   background-size: cover;
 }
 
+:global(body.ai-chat-page-body) {
+  overflow: hidden;
+}
+
 .ai-chat-page__inner {
   --container: 1280px;
-  height: calc(100vh - 128px);
-  min-height: calc(100vh - 128px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
 @media (max-width: 760px) {
   .ai-chat-page {
-    padding: 84px 0 28px;
-  }
-
-  .ai-chat-page__inner {
-    height: calc(100vh - 112px);
-    min-height: calc(100vh - 112px);
+    padding: 10px;
   }
 }
 </style>
