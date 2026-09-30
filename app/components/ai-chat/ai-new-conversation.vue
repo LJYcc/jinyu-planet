@@ -10,15 +10,17 @@ import planetIcon from '~/assets/logo/goldfish-planet-icon-start.png';
 import AiChatComposer from '~/components/ai-chat/ai-chat-composer.vue';
 
 const props = defineProps<{
-  modelValue: string;
   isSending: boolean;
   disabled?: boolean;
   requestError: string;
   canRetry: boolean;
+  deepThinkingAvailable?: boolean;
 }>();
 
+const modelValue = defineModel<string>({ required: true });
+const deepThinking = defineModel<boolean>('deepThinking', { default: false });
+
 const emit = defineEmits<{
-  'update:modelValue': [value: string];
   send: [];
   stop: [];
   retry: [];
@@ -49,10 +51,11 @@ const suggestions = [
 
       <div class="ai-new-conversation__composer">
         <ai-chat-composer
-          :model-value="props.modelValue"
+          v-model="modelValue"
           :is-sending="props.isSending"
           :disabled="props.disabled"
-          @update:model-value="emit('update:modelValue', $event)"
+          :deep-thinking-available="props.deepThinkingAvailable"
+          v-model:deep-thinking="deepThinking"
           @send="emit('send')"
           @stop="emit('stop')"
         />

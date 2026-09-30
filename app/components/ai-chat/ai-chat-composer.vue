@@ -1,24 +1,21 @@
 <script setup lang="ts">
-import { Promotion, VideoPause } from '@element-plus/icons-vue';
+import { MagicStick, Promotion, VideoPause } from '@element-plus/icons-vue';
 
 // 输入框内部只处理输入体验（Enter 发送、Shift+Enter 换行、停止按钮）。
 // 实际发送请求仍由父组件执行，因此这里不会重复实现 AI 请求逻辑。
 const props = defineProps<{
-  modelValue: string;
   isSending: boolean;
   disabled?: boolean;
+  deepThinkingAvailable?: boolean;
 }>();
 
+const input = defineModel<string>({ required: true });
+const deepThinking = defineModel<boolean>('deepThinking', { default: false });
+
 const emit = defineEmits<{
-  'update:modelValue': [value: string];
   send: [];
   stop: [];
 }>();
-
-const input = computed({
-  get: () => props.modelValue,
-  set: value => emit('update:modelValue', value)
-});
 
 function sendMessage() {
   if (!props.disabled && input.value.trim()) emit('send');
@@ -49,6 +46,20 @@ function handleComposerKeydown(event: Event) {
         :disabled="isSending || props.disabled"
         @keydown="handleComposerKeydown"
       />
+      <el-button
+        v-if="props.deepThinkingAvailable"
+        class="ai-chat-composer__thinking-toggle"
+        :type="deepThinking ? 'primary' : 'default'"
+        :plain="!deepThinking"
+        :icon="MagicStick"
+        round
+        :disabled="isSending || props.disabled"
+        :aria-pressed="deepThinking"
+        aria-label="切换深度思考"
+        @click="deepThinking = !deepThinking"
+      >
+        深度思考
+      </el-button>
       <el-button
         v-if="isSending"
         class="ai-chat-composer__action ai-chat-composer__action--stop"
@@ -107,6 +118,40 @@ function handleComposerKeydown(event: Event) {
   height: 42px;
   margin: 0;
   border-radius: 50%;
+}
+
+.ai-chat-composer__thinking-toggle {
+  grid-row: 2;
+  grid-column: 1;
+  align-self: center;
+  justify-self: start;
+}
+
+.ai-chat-composer__thinking-toggle {
+  min-width: 96px;
+  margin: 0;
+  border-color: rgba(157, 196, 255, 0.72);
+  color: #b9d3ff;
+  background: rgba(35, 70, 126, 0.18);
+}
+
+.ai-chat-composer__thinking-toggle:hover,
+.ai-chat-composer__thinking-toggle:focus-visible {
+  border-color: #9dc4ff;
+  color: #d8e7ff;
+  background: rgba(48, 93, 165, 0.32);
+}
+
+.ai-chat-composer__thinking-toggle.el-button--primary {
+  border-color: var(--accent);
+  color: var(--night);
+  background: var(--accent);
+}
+
+.ai-chat-composer__thinking-toggle.el-button--primary:hover,
+.ai-chat-composer__thinking-toggle.el-button--primary:focus-visible {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
 }
 
 .ai-chat-composer :deep(.ai-chat-composer__action .el-icon) {

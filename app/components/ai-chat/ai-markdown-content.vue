@@ -32,7 +32,20 @@ function renderMarkdownContent() {
     return html;
   }
 
-  const closingTags = ['</p>', '</h1>', '</h2>', '</h3>', '</h4>', '</h5>', '</h6>', '</li>', '</blockquote>'];
+  const closingTags = [
+    '</p>',
+    '</h1>',
+    '</h2>',
+    '</h3>',
+    '</h4>',
+    '</h5>',
+    '</h6>',
+    '</li>',
+    '</blockquote>',
+    '</pre>',
+    '</td>',
+    '</th>'
+  ];
   const closingTag = closingTags
     .map(tag => ({ tag, index: html.lastIndexOf(tag) }))
     .sort((first, second) => second.index - first.index)[0];
@@ -352,7 +365,9 @@ onBeforeUnmount(() => {
   :deep(h1),
   :deep(h2),
   :deep(h3),
-  :deep(h4) {
+  :deep(h4),
+  :deep(h5),
+  :deep(h6) {
     margin: 1.4em 0 0.65em;
     color: #f8fbf5;
     font-weight: 700;
@@ -372,10 +387,20 @@ onBeforeUnmount(() => {
     font-size: 1rem;
   }
 
+  :deep(h5) {
+    font-size: 0.92rem;
+  }
+
+  :deep(h6) {
+    font-size: 0.86rem;
+  }
+
   :deep(h1:first-child),
   :deep(h2:first-child),
   :deep(h3:first-child),
   :deep(h4:first-child),
+  :deep(h5:first-child),
+  :deep(h6:first-child),
   :deep(p:first-child) {
     margin-top: 0;
   }
@@ -392,6 +417,14 @@ onBeforeUnmount(() => {
   :deep(ol) {
     margin: 0 0 0.9em;
     padding-left: 1.5em;
+  }
+
+  :deep(ul) {
+    list-style: disc;
+  }
+
+  :deep(ol) {
+    list-style: decimal;
   }
 
   :deep(li + li) {

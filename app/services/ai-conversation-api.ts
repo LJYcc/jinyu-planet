@@ -1,4 +1,4 @@
-import type { ChatMessage, Conversation } from '~/types/ai-chat';
+import type { AiCapabilities, ChatMessage, Conversation } from '~/types/ai-chat';
 import type { ApiSuccess } from '~/types/api';
 
 // 这个模块只封装 AI 会话相关的 HTTP 请求，不修改页面状态。
@@ -7,6 +7,12 @@ export type UpdateAiConversationInput = {
   title?: string;
   isPinned?: boolean;
 };
+
+/** 读取服务端确认可用的 AI 能力；页面据此决定是否显示高级开关。 */
+export async function getAiCapabilities() {
+  const response = await $fetch<ApiSuccess<AiCapabilities>>('/api/ai/capabilities');
+  return response.data;
+}
 
 /** 读取当前匿名访客的全部会话。 */
 export async function listAiConversations() {
@@ -51,12 +57,13 @@ export function streamAiConversationMessage(
   conversationId: string,
   content: string,
   clientNonce: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  deepThinking = false
 ) {
   return fetch(`/api/ai/conversations/${conversationId}/messages`, {
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, clientNonce })
+    body: JSON.stringify({ content, clientNonce, deepThinking })
   });
 }

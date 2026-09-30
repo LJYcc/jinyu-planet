@@ -22,7 +22,7 @@ import {
   validateCurrentMessage
 } from '../../../../utils/ai-chat-validation';
 import { getPublicAiError, throwAiApiError } from '../../../../utils/ai-chat-errors';
-import { openAiStream, type AiModelMessage } from '../../../../services/ai-client';
+import { isDeepThinkingAvailable, openAiStream, type AiModelMessage } from '../../../../services/ai-client';
 
 const MAX_AI_REPLY_LENGTH = 1_000_000;
 const AI_SYSTEM_PROMPT = '你是金鱼星球的 AI 助理。请用清晰、诚实、易读的方式回答用户，不要编造无法确认的事实。';
@@ -55,8 +55,11 @@ export default defineApiHandler(async event => {
     apiError(404, 'AI_CONVERSATION_NOT_FOUND', 'Conversation was not found.');
   }
 
-  const body = await readJsonBody<{ content?: unknown; clientNonce?: unknown }>(event);
-  const { content, clientNonce } = validateCurrentMessage(body ?? {});
+  const body = await readJsonBody<{ content?: unknown; clientNonce?: unknown; deepThinking?: unknown }>(event);
+  const { content, clientNonce, deepThinking } = validateCurrentMessage(body ?? {});
+  if (deepThinking && !isDeepThinkingAvailable()) {
+    apiError(503, 'AI_THINKING_UNAVAILABLE', 'Deep thinking is not available for the current AI service.');
+  }
   // 用户消息先落库。即使模型随后失败，用户仍能通过同一 nonce 重试，而不会产生重复消息。
   const userMessage = await createOrReuseUserMessage(session.visitor.id, conversationId, content, clientNonce);
   if (!userMessage) apiError(404, 'AI_CONVERSATION_NOT_FOUND', 'Conversation was not found.');
@@ -67,7 +70,17 @@ export default defineApiHandler(async event => {
     const replay = new ReadableStream<Uint8Array>({
       /** 将已保存的完整回答伪装成一次正常的 SSE 流返回。 */
       start(controller) {
-        controller.enqueue(encodeEvent({ type: 'delta', content: existingAssistant.content }));
+        if (existingAssistant.reasoningContent) {
+          controller.enqueue(
+            encodeEvent({ type: 'reasoning_delta', reasoningContent: existingAssistant.reasoningContent })
+          );
+          if (existingAssistant.reasoningDurationMs !== null) {
+            controller.enqueue(
+              encodeEvent({ type: 'reasoning_done', reasoningDurationMs: existingAssistant.reasoningDurationMs })
+            );
+          }
+        }
+        controller.enqueue(encodeEvent({ type: 'answer_delta', content: existingAssistant.content }));
         controller.enqueue(encodeEvent({ type: 'done' }));
         controller.close();
       }
@@ -85,7 +98,7 @@ export default defineApiHandler(async event => {
   let upstream: Awaited<ReturnType<typeof openAiStream>> | undefined;
 
   try {
-    upstream = await openAiStream(modelMessages);
+    upstream = await openAiStream(modelMessages, { enableThinking: deepThinking });
   } catch (error) {
     throwAiApiError(error);
   }
@@ -95,19 +108,40 @@ export default defineApiHandler(async event => {
     /** 消费上游增量、转发给浏览器，并在成功结束后持久化完整回答。 */
     async start(controller) {
       let fullContent = '';
+      let fullReasoningContent = '';
+      let reasoningStartedAt: number | undefined;
+      let reasoningDurationMs: number | null = null;
 
       try {
         for await (const delta of upstream.deltas) {
-          fullContent += delta;
-          if (fullContent.length > MAX_AI_REPLY_LENGTH) {
+          if (delta.reasoningContent) {
+            reasoningStartedAt ??= Date.now();
+            fullReasoningContent += delta.reasoningContent;
+            enqueueIfOpen(
+              controller,
+              encodeEvent({ type: 'reasoning_delta', reasoningContent: delta.reasoningContent })
+            );
+          }
+          if (delta.content) {
+            if (reasoningStartedAt !== undefined && reasoningDurationMs === null) {
+              reasoningDurationMs = Math.max(0, Date.now() - reasoningStartedAt);
+              enqueueIfOpen(controller, encodeEvent({ type: 'reasoning_done', reasoningDurationMs }));
+            }
+            fullContent += delta.content;
+            enqueueIfOpen(controller, encodeEvent({ type: 'answer_delta', content: delta.content }));
+          }
+          if (fullContent.length + fullReasoningContent.length > MAX_AI_REPLY_LENGTH) {
             throw new Error('AI response exceeded the maximum length.');
           }
-          enqueueIfOpen(controller, encodeEvent({ type: 'delta', content: delta }));
         }
 
         if (!fullContent.trim()) throw new Error('AI response was empty.');
+        if (reasoningStartedAt !== undefined && reasoningDurationMs === null) {
+          reasoningDurationMs = Math.max(0, Date.now() - reasoningStartedAt);
+          enqueueIfOpen(controller, encodeEvent({ type: 'reasoning_done', reasoningDurationMs }));
+        }
         // 前端只收到片段，数据库只保存完整回答；两者的职责分开才能正确处理流中断。
-        await createAssistantMessage(conversationId, fullContent);
+        await createAssistantMessage(conversationId, fullContent, fullReasoningContent, reasoningDurationMs);
         enqueueIfOpen(controller, encodeEvent({ type: 'done' }));
         if (controller.desiredSize !== null) controller.close();
       } catch (error) {

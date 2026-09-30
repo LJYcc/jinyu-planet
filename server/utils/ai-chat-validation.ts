@@ -12,6 +12,7 @@ export const MAX_AI_CONTEXT_MESSAGES = 20;
 type CurrentMessageInput = {
   content?: unknown;
   clientNonce?: unknown;
+  deepThinking?: unknown;
 };
 
 type ConversationUpdateInput = {
@@ -34,7 +35,11 @@ export function validateCurrentMessage(input: CurrentMessageInput) {
     apiError(400, 'INVALID_AI_MESSAGE_NONCE', 'A valid client nonce is required.');
   }
 
-  return { content, clientNonce: input.clientNonce };
+  if (input.deepThinking !== undefined && typeof input.deepThinking !== 'boolean') {
+    apiError(400, 'INVALID_AI_THINKING_OPTION', 'The deep thinking option must be a boolean.');
+  }
+
+  return { content, clientNonce: input.clientNonce, deepThinking: input.deepThinking === true };
 }
 
 /** 只接受路由参数中的 UUID，避免把任意字符串带入数据库查询。 */

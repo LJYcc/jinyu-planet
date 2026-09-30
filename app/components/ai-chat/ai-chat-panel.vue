@@ -13,6 +13,7 @@ import AiNewConversation from '~/components/ai-chat/ai-new-conversation.vue';
 import {
   createAiConversation,
   deleteAiConversation,
+  getAiCapabilities,
   listAiConversationMessages,
   listAiConversations,
   streamAiConversationMessage,
@@ -27,7 +28,7 @@ type ApiErrorPayload = {
   message?: string;
 };
 
-const TYPEWRITER_CHARACTER_DELAY_MS = 28;
+const STREAM_RENDER_INTERVAL_MS = 16;
 
 const { bootstrap, visitor } = useVisitor();
 const route = useRoute();
@@ -43,6 +44,8 @@ const requestError = ref('');
 const lastFailedMessage = ref('');
 const lastFailedNonce = ref('');
 const typingMessageId = ref<string>();
+const isDeepThinkingAvailable = ref(false);
+const isDeepThinkingEnabled = ref(false);
 const loadingConversationTitle = ref<string>();
 const isSidebarCollapsed = ref(false);
 let abortController: AbortController | undefined;
@@ -69,11 +72,19 @@ const isNewConversation = computed(() => {
 });
 
 /** 创建一个带前端 ID 的消息对象，用于立即更新消息列表。 */
-function createMessage(role: ChatRole, content: string, createdAt?: string): ChatMessage {
+function createMessage(
+  role: ChatRole,
+  content: string,
+  createdAt?: string,
+  reasoningContent?: string | null,
+  reasoningDurationMs?: number | null
+): ChatMessage {
   return {
     id: uuidv4(),
     role,
     content,
+    reasoningContent,
+    reasoningDurationMs,
     createdAt
   };
 }
@@ -91,6 +102,10 @@ function getApiError(error: unknown) {
 
   if (payload?.code === 'AI_PROVIDER_AUTH_FAILED') {
     return 'AI 服务鉴权失败，请检查服务端配置。';
+  }
+
+  if (payload?.code === 'AI_THINKING_UNAVAILABLE') {
+    return '当前 AI 服务暂不支持深度思考。';
   }
 
   if (error instanceof Error && error.message) {
@@ -349,28 +364,68 @@ function parseStreamError(event: StreamEvent) {
   return 'AI 服务没有完成本次回答。';
 }
 
-/** 为逐字渲染提供一个可配置的字符间隔。 */
-function waitForTypewriterDelay() {
-  return new Promise(resolve => {
-    window.setTimeout(resolve, TYPEWRITER_CHARACTER_DELAY_MS);
-  });
-}
+/** 将网络片段合并为统一的 16ms UI 更新，避免逐字符或逐事件等待造成积压。 */
+function createStreamRenderer(assistantMessage: ChatMessage, signal: AbortSignal) {
+  let pendingContent = '';
+  let pendingReasoningContent = '';
+  let renderTimer: number | undefined;
 
-/** 将一个流式片段按 Unicode 字符逐个追加到 assistant 消息。 */
-async function appendTypewriterDelta(content: string, assistantMessage: ChatMessage, signal: AbortSignal) {
-  // Array.from 按 Unicode 字符遍历，不会把 emoji 等字符拆成无效的 UTF-16 片段。
-  for (const character of Array.from(content)) {
+  function flush() {
     if (signal.aborted) {
-      throw new DOMException('The AI request was stopped.', 'AbortError');
+      return;
     }
 
-    assistantMessage.content += character;
-    // 每个字符让出一个定时器周期，使 Vue 和浏览器有机会完成一次可见绘制。
-    await waitForTypewriterDelay();
+    if (pendingReasoningContent) {
+      assistantMessage.reasoningContent = `${assistantMessage.reasoningContent || ''}${pendingReasoningContent}`;
+      pendingReasoningContent = '';
+    }
+
+    if (pendingContent) {
+      assistantMessage.content += pendingContent;
+      pendingContent = '';
+    }
   }
+
+  function schedule() {
+    if (renderTimer) {
+      return;
+    }
+
+    renderTimer = window.setTimeout(() => {
+      renderTimer = undefined;
+      flush();
+    }, STREAM_RENDER_INTERVAL_MS);
+  }
+
+  return {
+    append(content: string, field: 'content' | 'reasoningContent') {
+      if (signal.aborted) {
+        throw new DOMException('The AI request was stopped.', 'AbortError');
+      }
+
+      if (field === 'content') {
+        pendingContent += content;
+      } else {
+        pendingReasoningContent += content;
+      }
+      schedule();
+    },
+    flush() {
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+        renderTimer = undefined;
+      }
+      flush();
+    },
+    dispose() {
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+      }
+    }
+  };
 }
 
-/** 读取服务端 SSE 响应，解析 delta、error 和 done 事件。 */
+/** 读取服务端 SSE 响应，解析思考、答案增量、error 和 done 事件。 */
 async function consumeStream(response: Response, assistantMessage: ChatMessage, signal: AbortSignal) {
   if (!response.body) {
     throw new Error('AI response body is empty.');
@@ -378,6 +433,7 @@ async function consumeStream(response: Response, assistantMessage: ChatMessage, 
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const renderer = createStreamRenderer(assistantMessage, signal);
   let buffer = '';
 
   try {
@@ -403,8 +459,16 @@ async function consumeStream(response: Response, assistantMessage: ChatMessage, 
         }
 
         const streamEvent = JSON.parse(data) as StreamEvent;
-        if (streamEvent.type === 'delta' && streamEvent.content) {
-          await appendTypewriterDelta(streamEvent.content, assistantMessage, signal);
+        if (streamEvent.type === 'reasoning_delta' && streamEvent.reasoningContent) {
+          renderer.append(streamEvent.reasoningContent, 'reasoningContent');
+        }
+
+        if (streamEvent.type === 'reasoning_done' && streamEvent.reasoningDurationMs !== undefined) {
+          assistantMessage.reasoningDurationMs = streamEvent.reasoningDurationMs;
+        }
+
+        if (streamEvent.type === 'answer_delta' && streamEvent.content) {
+          renderer.append(streamEvent.content, 'content');
         }
 
         if (streamEvent.type === 'error') {
@@ -412,11 +476,14 @@ async function consumeStream(response: Response, assistantMessage: ChatMessage, 
         }
 
         if (streamEvent.type === 'done') {
+          renderer.flush();
           return;
         }
       }
     }
+    renderer.flush();
   } finally {
+    renderer.dispose();
     reader.releaseLock();
   }
 }
@@ -458,7 +525,13 @@ async function requestReply(content: string, isRetry = false) {
   typingMessageId.value = assistantMessage.id;
 
   try {
-    const response = await streamAiConversationMessage(id, message, clientNonce, currentAbortController.signal);
+    const response = await streamAiConversationMessage(
+      id,
+      message,
+      clientNonce,
+      currentAbortController.signal,
+      isDeepThinkingEnabled.value
+    );
 
     if (!response.ok) {
       const responsePayload = await response.json().catch(() => {
@@ -582,6 +655,12 @@ function useSuggestion(suggestion: string) {
 onMounted(async () => {
   try {
     await bootstrap();
+    try {
+      const capabilities = await getAiCapabilities();
+      isDeepThinkingAvailable.value = capabilities.deepThinking;
+    } catch {
+      isDeepThinkingAvailable.value = false;
+    }
     await loadConversations();
   } catch (error) {
     requestError.value = getApiError(error);
@@ -619,10 +698,12 @@ onBeforeUnmount(stopGenerating);
       <ai-new-conversation
         v-if="isNewConversation"
         v-model="input"
+        v-model:deep-thinking="isDeepThinkingEnabled"
         :is-sending="isSending"
         :disabled="isLoadingConversations"
         :request-error="requestError"
         :can-retry="Boolean(lastFailedMessage)"
+        :deep-thinking-available="isDeepThinkingAvailable"
         @send="sendMessage"
         @stop="stopGenerating"
         @retry="retryLastMessage"
@@ -644,8 +725,10 @@ onBeforeUnmount(stopGenerating);
         />
         <ai-chat-composer
           v-model="input"
+          v-model:deep-thinking="isDeepThinkingEnabled"
           :is-sending="isSending"
           :disabled="isLoadingConversations || isLoadingHistory"
+          :deep-thinking-available="isDeepThinkingAvailable"
           @send="sendMessage"
           @stop="stopGenerating"
         />

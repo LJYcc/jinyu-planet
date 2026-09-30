@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Loading, RefreshRight, WarningFilled } from '@element-plus/icons-vue';
 import planetIcon from '~/assets/logo/goldfish-planet-icon-tech.png';
+import AiMarkdownContent from '~/components/ai-chat/ai-markdown-content.vue';
 import AiMessageContent from '~/components/ai-chat/ai-message-content.vue';
 import type { ChatMessage } from '~/types/ai-chat';
 
@@ -22,8 +23,22 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
+function formatReasoningDuration(durationMs: number) {
+  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+
+  if (hours > 0) return `${hours}小时${minutes}分${seconds}秒`;
+  if (minutes > 0) return `${minutes}分${seconds}秒`;
+  return `${seconds}秒`;
+}
+
 const isEditingTitle = ref(false);
 const titleDraft = ref('');
+const expandedReasoning = ref<string[]>([]);
+const shouldFollowMessages = ref(true);
 const messagesElement = ref<HTMLElement>();
 const messageListElement = ref<HTMLElement>();
 let scrollFrame: number | undefined;
@@ -31,17 +46,28 @@ let messageListObserver: ResizeObserver | undefined;
 
 /** 合并连续的流式更新，在 DOM 更新完成后的下一帧将消息区域定位到底部。 */
 function scrollToBottom() {
-  if (import.meta.server || scrollFrame) {
+  if (import.meta.server || scrollFrame || !shouldFollowMessages.value) {
     return;
   }
 
   scrollFrame = window.requestAnimationFrame(() => {
-    if (messagesElement.value) {
+    if (messagesElement.value && shouldFollowMessages.value) {
       messagesElement.value.scrollTop = messagesElement.value.scrollHeight;
     }
 
     scrollFrame = undefined;
   });
+}
+
+/** 用户主动上滚后暂停自动跟随；滚回底部时恢复跟随。 */
+function handleMessagesScroll() {
+  if (!messagesElement.value) {
+    return;
+  }
+
+  const distanceFromBottom =
+    messagesElement.value.scrollHeight - messagesElement.value.scrollTop - messagesElement.value.clientHeight;
+  shouldFollowMessages.value = distanceFromBottom <= 24;
 }
 
 function startTitleEdit() {
@@ -70,6 +96,34 @@ function saveTitle() {
 }
 
 watch(() => props.messages, scrollToBottom, { deep: true, flush: 'post' });
+
+watch(
+  () => props.messages.map(message => message.id).join(','),
+  (messageIds, previousMessageIds) => {
+    const previousIds = new Set(previousMessageIds ? previousMessageIds.split(',') : []);
+    const hasNewUserMessage = props.messages.some(message => {
+      return message.role === 'user' && !previousIds.has(message.id);
+    });
+
+    if (hasNewUserMessage) {
+      shouldFollowMessages.value = true;
+    }
+
+    if (messageIds !== previousMessageIds) {
+      scrollToBottom();
+    }
+  },
+  { flush: 'post' }
+);
+
+watch(
+  () => props.typingMessageId,
+  messageId => {
+    if (messageId && !expandedReasoning.value.includes(messageId)) {
+      expandedReasoning.value = [...expandedReasoning.value, messageId];
+    }
+  }
+);
 
 watch(() => [props.isSending, props.requestError], scrollToBottom, { flush: 'post' });
 
@@ -132,6 +186,7 @@ defineExpose({ scrollToBottom });
     class="ai-chat-content__messages"
     :class="{ 'ai-chat-content__messages--loading': props.isLoadingContent }"
     :aria-busy="props.isLoadingContent"
+    @scroll="handleMessagesScroll"
   >
     <div
       v-show="!props.isLoadingContent"
@@ -163,10 +218,34 @@ defineExpose({ scrollToBottom });
             {{ message.role === 'user' ? '你' : '小鱼 AI 助理' }}
           </p>
           <span
-            v-if="message.id === props.typingMessageId && !message.content"
+            v-if="message.id === props.typingMessageId && !message.content && !message.reasoningContent"
             class="ai-chat-content__typing-cursor ai-chat-content__typing-cursor--waiting"
             aria-label="AI 正在输入"
           />
+          <el-collapse
+            v-if="message.role === 'assistant' && message.reasoningContent"
+            v-model="expandedReasoning"
+            class="ai-chat-content__reasoning"
+          >
+            <el-collapse-item :name="message.id">
+              <template #title>
+                <span class="ai-chat-content__reasoning-title">
+                  {{
+                    message.reasoningDurationMs !== null && message.reasoningDurationMs !== undefined
+                      ? `已思考（${formatReasoningDuration(message.reasoningDurationMs)}）`
+                      : message.id === props.typingMessageId
+                        ? '正在思考'
+                        : '已思考'
+                  }}
+                </span>
+              </template>
+              <ai-markdown-content
+                class="ai-chat-content__reasoning-markdown"
+                :content="message.reasoningContent"
+                :show-typing-cursor="false"
+              />
+            </el-collapse-item>
+          </el-collapse>
           <ai-message-content
             v-if="message.role === 'user' || message.content"
             class="ai-chat-content__message-bubble"
@@ -411,6 +490,84 @@ defineExpose({ scrollToBottom });
 .ai-chat-content__typing-cursor--waiting {
   display: block;
   margin: 0 0 8px;
+}
+
+.ai-chat-content__reasoning {
+  margin: 0 0 9px;
+  overflow: hidden;
+  border: 1px solid rgba(218, 235, 225, 0.24);
+  border-radius: 10px;
+  background: rgba(13, 37, 41, 0.66);
+}
+
+.ai-chat-content__reasoning :deep(.el-collapse-item__header) {
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid transparent;
+  color: #e5eee7;
+  background: rgba(255, 255, 255, 0.035);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.ai-chat-content__reasoning :deep(.el-collapse-item__header:hover),
+.ai-chat-content__reasoning :deep(.el-collapse-item__header:focus-visible) {
+  color: var(--accent);
+  background: rgba(229, 199, 95, 0.1);
+  border-bottom-color: rgba(218, 235, 225, 0.18);
+  outline: none;
+}
+
+.ai-chat-content__reasoning :deep(.el-collapse-item__arrow) {
+  color: #b9cbc2;
+  font-size: 16px;
+}
+
+.ai-chat-content__reasoning-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ai-chat-content__reasoning :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+  background: rgba(4, 18, 22, 0.34);
+}
+
+.ai-chat-content__reasoning :deep(.el-collapse-item__content) {
+  padding: 12px 14px 14px;
+}
+
+.ai-chat-content__reasoning-markdown {
+  color: #b9c9c0;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.ai-chat-content__reasoning-markdown :deep(h1),
+.ai-chat-content__reasoning-markdown :deep(h2),
+.ai-chat-content__reasoning-markdown :deep(h3),
+.ai-chat-content__reasoning-markdown :deep(h4),
+.ai-chat-content__reasoning-markdown :deep(h5),
+.ai-chat-content__reasoning-markdown :deep(h6),
+.ai-chat-content__reasoning-markdown :deep(p),
+.ai-chat-content__reasoning-markdown :deep(li),
+.ai-chat-content__reasoning-markdown :deep(blockquote),
+.ai-chat-content__reasoning-markdown :deep(td),
+.ai-chat-content__reasoning-markdown :deep(th) {
+  font-size: 12px;
+}
+
+.ai-chat-content__reasoning-markdown :deep(h1),
+.ai-chat-content__reasoning-markdown :deep(h2),
+.ai-chat-content__reasoning-markdown :deep(h3),
+.ai-chat-content__reasoning-markdown :deep(h4),
+.ai-chat-content__reasoning-markdown :deep(h5),
+.ai-chat-content__reasoning-markdown :deep(h6) {
+  margin-top: 0.9em;
+  margin-bottom: 0.45em;
 }
 
 @keyframes ai-chat-cursor-blink {

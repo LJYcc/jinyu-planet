@@ -14,6 +14,8 @@ export type AiMessageForModel = {
 
 export type PublicAiMessage = AiMessageForModel & {
   id: string;
+  reasoningContent: string | null;
+  reasoningDurationMs: number | null;
   createdAt: string;
 };
 
@@ -43,11 +45,20 @@ function toPublicConversation(conversation: {
 }
 
 /** 将数据库消息转换为前端可以直接消费的公开 DTO。 */
-function toPublicMessage(message: { id: string; role: 'user' | 'assistant'; content: string; createdAt: Date }) {
+function toPublicMessage(message: {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  reasoningContent: string | null;
+  reasoningDurationMs: number | null;
+  createdAt: Date;
+}) {
   return {
     id: message.id,
     role: message.role,
     content: message.content,
+    reasoningContent: message.reasoningContent,
+    reasoningDurationMs: message.reasoningDurationMs,
     createdAt: message.createdAt.toISOString()
   } satisfies PublicAiMessage;
 }
@@ -113,10 +124,26 @@ export async function listAiMessages(visitorId: string, conversationId: string) 
   const messages = await prisma.aiMessage.findMany({
     where: { conversationId },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, role: true, content: true, createdAt: true }
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      reasoningContent: true,
+      reasoningDurationMs: true,
+      createdAt: true
+    }
   });
   return messages.map(message =>
-    toPublicMessage(message as { id: string; role: 'user' | 'assistant'; content: string; createdAt: Date })
+    toPublicMessage(
+      message as {
+        id: string;
+        role: 'user' | 'assistant';
+        content: string;
+        reasoningContent: string | null;
+        reasoningDurationMs: number | null;
+        createdAt: Date;
+      }
+    )
   );
 }
 
@@ -195,19 +222,46 @@ export async function findAssistantAfterUser(conversationId: string, userCreated
       createdAt: { gt: userCreatedAt }
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { content: true }
+    select: { content: true, reasoningContent: true, reasoningDurationMs: true }
   });
 }
 
 /** 在上游流完整结束后保存 assistant 消息，并更新时间线。 */
-export async function createAssistantMessage(conversationId: string, content: string) {
+export async function createAssistantMessage(
+  conversationId: string,
+  content: string,
+  reasoningContent: string,
+  reasoningDurationMs: number | null
+) {
   // assistant 内容只有在上游流完整结束后才写入，避免数据库出现看似完整的半截回答。
   return prisma.$transaction(async transaction => {
     const message = await transaction.aiMessage.create({
-      data: { conversationId, role: 'assistant', content },
-      select: { id: true, role: true, content: true, createdAt: true }
+      data: {
+        conversationId,
+        role: 'assistant',
+        content,
+        reasoningContent: reasoningContent || null,
+        reasoningDurationMs
+      },
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        reasoningContent: true,
+        reasoningDurationMs: true,
+        createdAt: true
+      }
     });
     await transaction.aiConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
-    return toPublicMessage(message as { id: string; role: 'user' | 'assistant'; content: string; createdAt: Date });
+    return toPublicMessage(
+      message as {
+        id: string;
+        role: 'user' | 'assistant';
+        content: string;
+        reasoningContent: string | null;
+        reasoningDurationMs: number | null;
+        createdAt: Date;
+      }
+    );
   });
 }

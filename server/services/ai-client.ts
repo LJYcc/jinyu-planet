@@ -10,6 +10,11 @@ export type AiModelMessage = {
   content: string;
 };
 
+export type AiStreamDelta = {
+  content?: string;
+  reasoningContent?: string;
+};
+
 export class AiServiceUnavailableError extends Error {
   constructor() {
     super('AI service has not been configured.');
@@ -29,7 +34,12 @@ export class AiUpstreamError extends Error {
 
 const DEFAULT_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen-plus';
-const DEFAULT_TIMEOUT = 30_000;
+const DEFAULT_IDLE_TIMEOUT = 30_000;
+
+/** 深度思考由服务端配置控制；默认开启是因为当前部署模型已确认支持该能力。 */
+export function isDeepThinkingAvailable() {
+  return Boolean(process.env.QWEN_API_KEY?.trim()) && process.env.QWEN_DEEP_THINKING_ENABLED !== 'false';
+}
 
 /** 读取并规范化千问服务配置，集中处理默认地址、模型和超时。 */
 function getConfig() {
@@ -39,13 +49,13 @@ function getConfig() {
   const configuredUrl = process.env.QWEN_BASE_URL?.trim() || DEFAULT_URL;
   // 兼容两种环境变量写法：基础地址以 /v1 结尾，或直接填写完整 chat/completions 地址。
   const url = /\/v1\/?$/i.test(configuredUrl) ? `${configuredUrl.replace(/\/$/, '')}/chat/completions` : configuredUrl;
-  const timeout = Number(process.env.QWEN_TIMEOUT_MS);
+  const idleTimeout = Number(process.env.QWEN_TIMEOUT_MS);
 
   return {
     apiKey,
     url,
     model: process.env.QWEN_MODEL?.trim() || DEFAULT_MODEL,
-    timeoutMs: Number.isInteger(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT
+    idleTimeoutMs: Number.isInteger(idleTimeout) && idleTimeout > 0 ? idleTimeout : DEFAULT_IDLE_TIMEOUT
   };
 }
 
@@ -55,7 +65,7 @@ function readErrorStatus(response: Response) {
 }
 
 /** 从一条 OpenAI-compatible 响应中提取增量文本。 */
-function getDelta(payload: unknown) {
+function getDelta(payload: unknown): AiStreamDelta | undefined {
   // 供应商响应来自网络，先逐层确认数据结构，再读取 content。
   if (typeof payload !== 'object' || payload === null) {
     return undefined;
@@ -76,23 +86,56 @@ function getDelta(payload: unknown) {
     return undefined;
   }
 
-  const content = (delta as { content?: unknown }).content;
-  if (typeof content !== 'string') {
+  const value = delta as { content?: unknown; reasoning_content?: unknown; reasoningContent?: unknown };
+  const content = typeof value.content === 'string' ? value.content : undefined;
+  const reasoningContent =
+    typeof value.reasoning_content === 'string'
+      ? value.reasoning_content
+      : typeof value.reasoningContent === 'string'
+        ? value.reasoningContent
+        : undefined;
+
+  if (content === undefined && reasoningContent === undefined) {
     return undefined;
   }
 
-  return content;
+  return { content, reasoningContent };
 }
 
 /** 将 OpenAI-compatible SSE 中的 data 行转换为文本片段。 */
-async function* readSseDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+async function* readSseDeltas(
+  body: ReadableStream<Uint8Array>,
+  options: { controller: AbortController; idleTimeoutMs: number }
+): AsyncGenerator<AiStreamDelta> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let idleTimeoutTriggered = false;
+      const idleTimer = setTimeout(() => {
+        idleTimeoutTriggered = true;
+        options.controller.abort();
+      }, options.idleTimeoutMs);
+
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await reader.read();
+      } catch (error) {
+        if (idleTimeoutTriggered) {
+          throw new AiUpstreamError('timeout');
+        }
+        throw error;
+      } finally {
+        clearTimeout(idleTimer);
+      }
+
+      if (idleTimeoutTriggered) {
+        throw new AiUpstreamError('timeout');
+      }
+
+      const { done, value } = readResult;
       if (done) {
         break;
       }
@@ -132,19 +175,21 @@ async function* readSseDeltas(body: ReadableStream<Uint8Array>): AsyncGenerator<
 }
 
 /** 打开千问流；真正的文本片段由返回的 async generator 逐段产生。 */
-export async function openAiStream(messages: AiModelMessage[]) {
+export async function openAiStream(messages: AiModelMessage[], options: { enableThinking?: boolean } = {}) {
   const config = getConfig();
   const controller = new AbortController();
-  const timer = setTimeout(() => {
+  const connectionTimer = setTimeout(() => {
     controller.abort();
-  }, config.timeoutMs);
+  }, config.idleTimeoutMs);
 
   try {
     // 请求体明确开启 stream，让供应商返回可以逐段读取的响应流。
     const requestBody = JSON.stringify({
       model: config.model,
       messages,
-      stream: true
+      stream: true,
+      // Python SDK 的 extra_body 会把该字段合并到 HTTP JSON；原生 fetch 直接发送顶层参数。
+      ...(options.enableThinking ? { enable_thinking: true } : {})
     });
     const response = await fetch(config.url, {
       method: 'POST',
@@ -155,6 +200,7 @@ export async function openAiStream(messages: AiModelMessage[]) {
       body: requestBody,
       signal: controller.signal
     });
+    clearTimeout(connectionTimer);
 
     if (!response.ok) {
       throw new AiUpstreamError('http', readErrorStatus(response));
@@ -164,16 +210,11 @@ export async function openAiStream(messages: AiModelMessage[]) {
       throw new AiUpstreamError('invalid_response');
     }
 
-    const source = readSseDeltas(response.body);
-    /** 转发上游文本片段，并在生成结束时清理超时计时器。 */
+    const source = readSseDeltas(response.body, { controller, idleTimeoutMs: config.idleTimeoutMs });
+    /** 转发上游文本片段；流式阶段采用每次读取的空闲超时。 */
     async function* deltas() {
-      try {
-        for await (const delta of source) {
-          yield delta;
-        }
-      } finally {
-        // 无论正常结束、异常还是浏览器取消，都释放本次上游请求的超时计时器。
-        clearTimeout(timer);
+      for await (const delta of source) {
+        yield delta;
       }
     }
 
@@ -186,7 +227,7 @@ export async function openAiStream(messages: AiModelMessage[]) {
       cancel
     };
   } catch (error) {
-    clearTimeout(timer);
+    clearTimeout(connectionTimer);
 
     if (error instanceof AiUpstreamError) {
       throw error;
