@@ -3,6 +3,8 @@ name: Build and deploy
 
 # 只有 prod 分支的推送会触发生产部署。
 on:
+  # 允许在 GitHub Actions 页面手动触发生产部署。
+  workflow_dispatch:
   push:
     branches:
       - prod
