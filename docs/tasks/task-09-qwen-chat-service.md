@@ -89,12 +89,12 @@
 - [ ] 发送新消息时消息区域自动定位到底部并跟随回答；访客主动上滚后不再强制回底部，滚回底部后恢复自动跟随。
 - [ ] AI 回复的 Markdown 标题、表格、分隔线和代码块可正确呈现；原始 HTML 不会执行，用户消息不会被作为 Markdown 渲染。
 - [ ] AI 回复可呈现 `$...$`、`$$...$$`、`\\(...\\)` 与 `\\[...\\]` 公式、标记为 `mermaid` 的围栏图表和 `toml` 代码块；围栏代码和行内代码中的 LaTeX 字面量不被改写，Mermaid 图表位于带工具栏、无滚动条、图表居中的固定宽高独立画布且支持按钮或画布内滚轮缩放、左键拖拽平移、还原和下载 PNG，缩放和位移不会改变画布尺寸，公式与图表在窄屏不撑破消息区域，错误 Mermaid 源码可见。
-- [ ] 当前千问模型和账号已确认支持时，页面显示深度思考胶囊按钮；关闭时向千问显式发送 `enable_thinking: false`，开启时发送 `true`，服务端禁用时拒绝开启请求。
-- [ ] 深度思考流式增量与最终回答通过独立 SSE 事件 `reasoning_delta` 和 `answer_delta` 传输，思考完成事件携带耗时；思考内容持久化到 `reasoningContent`，耗时持久化到 `reasoningDurationMs`，最终答案持久化到 `content`；前端使用带背景和边框的可折叠信息块展示思考，生成期间标题为“正在思考”，完成后标题为“已思考（耗时）”，标题为 16px、内容为 12px Markdown，思考阶段不显示输入光标且不会混入最终答案。
+- [x] 当前千问模型和账号已确认支持时，页面显示深度思考胶囊按钮；关闭时向千问显式发送 `enable_thinking: false`，开启时发送 `true`，服务端禁用时拒绝开启请求。
+- [x] 深度思考流式增量与最终回答通过独立 SSE 事件 `reasoning_delta` 和 `answer_delta` 传输，思考完成事件携带耗时；思考内容持久化到 `reasoningContent`，耗时持久化到 `reasoningDurationMs`，最终答案持久化到 `content`；前端使用带背景和边框的可折叠信息块展示思考，生成期间标题为“正在思考”，完成后标题为“已思考（耗时）”，标题为 16px、内容为 12px Markdown，思考阶段不显示输入光标且不会混入最终答案。
 - [ ] 获取历史消息时可同时恢复思考内容和最终答案；停止、失败或不完整回答不会保存半截 assistant 消息。
 - [ ] 网络重试不会重复保存 user 消息；停止或失败时界面可重试且不伪造回答。
 - [ ] RAG 和 Agent 工具不在本任务中实现；联网搜索仅按 Phase 6 的后续阶段接入。
-- [ ] `qwen3.8-max` 联网搜索通过 DashScope 原生 `multimodal-generation` 流式接口调用；服务端传递 `enable_search`，并在搜索开启时传递 `search_options.enable_source: true` 以取得来源。服务端只读取现有的 `QWEN_API_KEY`。
+- [x] `qwen3.8-max` 联网搜索通过 DashScope 原生 `multimodal-generation` 流式接口调用；服务端传递 `enable_search`，并在搜索开启时传递 `search_options.enable_source: true` 以取得来源。服务端只读取现有的 `QWEN_API_KEY`。
 
 **验证：**
 
@@ -103,16 +103,16 @@
 - [ ] 手工验证浏览器网络请求只发送当前消息，并检查流式片段逐步显示。
 - [ ] 手工验证 AI 回复的 Markdown 标题、表格、代码块和分隔线，以及窄屏下代码和表格的横向滚动。
 - [ ] 手工验证 LaTeX、Mermaid 和 TOML 代码块，以及 Mermaid 语法错误时保留源码的降级展示。
-- [ ] 手工验证深度思考按钮、无光标的思考区、正在思考/已思考耗时标题、带箭头的背景/边框折叠交互、思考 Markdown 渲染、思考/答案分离流式展示、历史恢复、服务端禁用和伪造参数拒绝。
+- [x] 手工验证深度思考按钮、无光标的思考区、正在思考/已思考耗时标题、带箭头的背景/边框折叠交互、思考 Markdown 渲染、思考/答案分离流式展示、历史恢复、服务端禁用和伪造参数拒绝。
 - [ ] 验证千问错误、停止生成和重复 nonce 场景。
 - [ ] 运行 `npx tsc --noEmit` 和 `git diff --check`；不主动运行项目级 lint/build。
-- [ ] 手工验证 qwen3.8-max 的 DashScope 原生多模态流式调用、联网搜索开关、`enable_search` 与 `search_options.enable_source` 请求参数、搜索中状态、可信来源标题/链接、来源持久化与历史恢复，以及能力关闭时的服务端拒绝。
+- [x] 手工验证 qwen3.8-max 的 DashScope 原生多模态流式调用、联网搜索开关、`enable_search` 与 `search_options.enable_source` 请求参数、搜索中状态、可信来源标题/链接、来源持久化与历史恢复，以及能力关闭时的服务端拒绝。
 
 ## Phase 6：高级 AI 能力分阶段扩展
 
 - [x] 1. **富内容展示：** 支持 KaTeX、Mermaid 与 TOML 高亮；不改变文本消息接口、会话数据或模型请求。
-- [ ] 2. **深度思考：** 仅在已确认当前千问模型和账号支持时显示胶囊按钮；服务端通过 `reasoning_delta` 和 `answer_delta` 两类 SSE 事件分离思考增量与最终回答，并分别通过 `reasoningContent`/`content` 字段传输与持久化，前端折叠展示思考过程并支持历史消息恢复，不把它混入最终答案。
-- [ ] 3. **联网搜索：** qwen3.8-max 使用 DashScope 原生 `multimodal-generation` 流式接口，服务端始终向千问明确传递 `enable_search: true/false`，并在开启时传递 `search_options.enable_source: true`；用户开启且当前千问模型/账号可用时，通过独立 SSE 事件转发 `search_info.search_results` 中的可信来源；`ai-search-sources` 在每条有来源的 assistant 消息底部展示“已搜索 N 个网页”触发器，点击打开侧边抽屉展示站点、标题、千问返回的摘要和安全链接，不额外抓取网页正文；来源不能由模型文本伪造。来源随 assistant 消息持久化并在幂等重试、历史恢复时回放；能力不可用时不显示开关，伪造请求会被服务端拒绝。
+- [x] 2. **深度思考：** 仅在已确认当前千问模型和账号支持时显示胶囊按钮；服务端通过 `reasoning_delta` 和 `answer_delta` 两类 SSE 事件分离思考增量与最终回答，并分别通过 `reasoningContent`/`content` 字段传输与持久化，前端折叠展示思考过程并支持历史消息恢复，不把它混入最终答案。
+- [x] 3. **联网搜索：** qwen3.8-max 使用 DashScope 原生 `multimodal-generation` 流式接口，服务端始终向千问明确传递 `enable_search: true/false`，并在开启时传递 `search_options.enable_source: true`；用户开启且当前千问模型/账号可用时，通过独立 SSE 事件转发 `search_info.search_results` 中的可信来源；`ai-search-sources` 在每条有来源的 assistant 消息底部展示“已搜索 N 个网页”触发器，点击打开侧边抽屉展示站点、标题、千问返回的摘要和安全链接，不额外抓取网页正文；来源不能由模型文本伪造。来源随 assistant 消息持久化并在幂等重试、历史恢复时回放；能力不可用时不显示开关，伪造请求会被服务端拒绝。
 - [ ] 4. **图片与文档：** 新增受保护上传接口、对象存储、MIME/大小/内容校验和文件解析；消息模型改为图文内容数组，图片请求使用视觉模型，文档提取文本需限长、分段并记录来源。
 
 **依赖：** Task 7、匿名访客会话 API。
