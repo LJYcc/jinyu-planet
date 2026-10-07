@@ -22,7 +22,13 @@ import {
   validateCurrentMessage
 } from '../../../../utils/ai-chat-validation';
 import { getPublicAiError, throwAiApiError } from '../../../../utils/ai-chat-errors';
-import { isDeepThinkingAvailable, openAiStream, type AiModelMessage } from '../../../../services/ai-client';
+import {
+  isDeepThinkingAvailable,
+  isWebSearchAvailable,
+  openAiStream,
+  type AiModelMessage,
+  type AiSearchSource
+} from '../../../../services/ai-client';
 
 const MAX_AI_REPLY_LENGTH = 1_000_000;
 const AI_SYSTEM_PROMPT = '你是金鱼星球的 AI 助理。请用清晰、诚实、易读的方式回答用户，不要编造无法确认的事实。';
@@ -55,10 +61,18 @@ export default defineApiHandler(async event => {
     apiError(404, 'AI_CONVERSATION_NOT_FOUND', 'Conversation was not found.');
   }
 
-  const body = await readJsonBody<{ content?: unknown; clientNonce?: unknown; deepThinking?: unknown }>(event);
-  const { content, clientNonce, deepThinking } = validateCurrentMessage(body ?? {});
+  const body = await readJsonBody<{
+    content?: unknown;
+    clientNonce?: unknown;
+    deepThinking?: unknown;
+    webSearch?: unknown;
+  }>(event);
+  const { content, clientNonce, deepThinking, webSearch } = validateCurrentMessage(body ?? {});
   if (deepThinking && !isDeepThinkingAvailable()) {
     apiError(503, 'AI_THINKING_UNAVAILABLE', 'Deep thinking is not available for the current AI service.');
+  }
+  if (webSearch && !isWebSearchAvailable()) {
+    apiError(503, 'AI_SEARCH_UNAVAILABLE', 'Web search is not configured.');
   }
   // 用户消息先落库。即使模型随后失败，用户仍能通过同一 nonce 重试，而不会产生重复消息。
   const userMessage = await createOrReuseUserMessage(session.visitor.id, conversationId, content, clientNonce);
@@ -70,6 +84,11 @@ export default defineApiHandler(async event => {
     const replay = new ReadableStream<Uint8Array>({
       /** 将已保存的完整回答伪装成一次正常的 SSE 流返回。 */
       start(controller) {
+        if (existingAssistant.searchSources) {
+          controller.enqueue(
+            encodeEvent({ type: 'search_results', sources: JSON.parse(existingAssistant.searchSources) })
+          );
+        }
         if (existingAssistant.reasoningContent) {
           controller.enqueue(
             encodeEvent({ type: 'reasoning_delta', reasoningContent: existingAssistant.reasoningContent })
@@ -91,19 +110,9 @@ export default defineApiHandler(async event => {
     return replay;
   }
 
-  // 第二阶段：只取最近上下文发送给模型，避免历史无限增长导致请求过大。
-  // 模型上下文只取最近 N 条；完整历史仍在数据库中供页面按需读取，不能无限增长到模型请求里。
-  const history = await listRecentAiMessagesForModel(conversationId, MAX_AI_CONTEXT_MESSAGES);
-  const modelMessages: AiModelMessage[] = [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history];
   let upstream: Awaited<ReturnType<typeof openAiStream>> | undefined;
 
-  try {
-    upstream = await openAiStream(modelMessages, { enableThinking: deepThinking });
-  } catch (error) {
-    throwAiApiError(error);
-  }
-
-  // 第三阶段：把供应商 async generator 包装为本站的 SSE ReadableStream。
+  // 将搜索、模型流和持久化串在同一条 SSE 生命周期中，搜索来源不会被模型文本伪造。
   const stream = new ReadableStream<Uint8Array>({
     /** 消费上游增量、转发给浏览器，并在成功结束后持久化完整回答。 */
     async start(controller) {
@@ -111,9 +120,31 @@ export default defineApiHandler(async event => {
       let fullReasoningContent = '';
       let reasoningStartedAt: number | undefined;
       let reasoningDurationMs: number | null = null;
+      let searchSources: AiSearchSource[] = [];
+      let lastSearchSourcesFingerprint: string | undefined;
 
       try {
+        if (webSearch) enqueueIfOpen(controller, encodeEvent({ type: 'search_started' }));
+
+        const history = await listRecentAiMessagesForModel(conversationId, MAX_AI_CONTEXT_MESSAGES);
+        const modelMessages: AiModelMessage[] = [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history];
+        try {
+          upstream = await openAiStream(modelMessages, { enableThinking: deepThinking, enableSearch: webSearch });
+        } catch (error) {
+          throwAiApiError(error);
+        }
+
         for await (const delta of upstream.deltas) {
+          if (delta.searchSources?.length) {
+            searchSources = delta.searchSources;
+            // DashScope 会在后续答案片段中重复携带同一份 search_results。
+            // 只在来源首次出现或实际变更时转发，避免浏览器收到大量相同 SSE 事件。
+            const fingerprint = JSON.stringify(searchSources);
+            if (fingerprint !== lastSearchSourcesFingerprint) {
+              lastSearchSourcesFingerprint = fingerprint;
+              enqueueIfOpen(controller, encodeEvent({ type: 'search_results', sources: searchSources }));
+            }
+          }
           if (delta.reasoningContent) {
             reasoningStartedAt ??= Date.now();
             fullReasoningContent += delta.reasoningContent;
@@ -136,12 +167,21 @@ export default defineApiHandler(async event => {
         }
 
         if (!fullContent.trim()) throw new Error('AI response was empty.');
+        if (webSearch && !searchSources.length) {
+          enqueueIfOpen(controller, encodeEvent({ type: 'search_results', sources: [] }));
+        }
         if (reasoningStartedAt !== undefined && reasoningDurationMs === null) {
           reasoningDurationMs = Math.max(0, Date.now() - reasoningStartedAt);
           enqueueIfOpen(controller, encodeEvent({ type: 'reasoning_done', reasoningDurationMs }));
         }
         // 前端只收到片段，数据库只保存完整回答；两者的职责分开才能正确处理流中断。
-        await createAssistantMessage(conversationId, fullContent, fullReasoningContent, reasoningDurationMs);
+        await createAssistantMessage(
+          conversationId,
+          fullContent,
+          fullReasoningContent,
+          reasoningDurationMs,
+          searchSources
+        );
         enqueueIfOpen(controller, encodeEvent({ type: 'done' }));
         if (controller.desiredSize !== null) controller.close();
       } catch (error) {

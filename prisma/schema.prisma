@@ -177,6 +177,7 @@ model AiMessage {
   content        String        @db.LongText
   reasoningContent String?      @map("reasoning_content") @db.LongText
   reasoningDurationMs Int?      @map("reasoning_duration_ms")
+  searchSources    String?      @map("search_sources") @db.LongText
   clientNonce    String?       @map("client_nonce") @db.Char(36)
   createdAt      DateTime      @default(now()) @map("created_at")
 

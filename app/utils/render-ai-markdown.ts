@@ -200,6 +200,9 @@ const renderLinkOpen: RendererRule = (tokens, index, options, _env, self) => {
 
 markdown.renderer.rules.link_open = renderLinkOpen;
 markdown.renderer.rules.fence = renderFence;
+markdown.renderer.rules.table_open = () =>
+  '<div class="ai-chat-markdown__table-wrapper"><table class="ai-chat-markdown__table">\n';
+markdown.renderer.rules.table_close = () => '</table></div>\n';
 
 /** 将模型 Markdown 渲染为安全 HTML，禁用原始 HTML 并转义代码内容。 */
 export function renderAiMarkdown(content: string) {
