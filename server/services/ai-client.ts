@@ -246,6 +246,8 @@ export async function openAiStream(
     };
   } catch (error) {
     clearTimeout(connectionTimer);
+    // 配置错误不应伪装成上游网络异常；调用方会据此提示管理员补充服务端密钥。
+    if (error instanceof AiServiceUnavailableError) throw error;
     if (error instanceof AiUpstreamError) throw error;
     if (error instanceof Error && error.name === 'AbortError') throw new AiUpstreamError('timeout');
     throw new AiUpstreamError('http');
