@@ -104,6 +104,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "===== checking GitHub Environment secret injection ====="
+          # 只输出是否存在和长度，不输出 Secret 内容；若这里为 false，问题发生在 GitHub 配置层而非 Docker。
+          for ai_secret_name in QWEN_API_KEY QWEN_BASE_URL QWEN_MODEL QWEN_TIMEOUT_MS QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
+            ai_secret_value="${!ai_secret_name:-}"
+            if [[ -n "$ai_secret_value" ]]; then
+              echo "$ai_secret_name: present (length ${#ai_secret_value})"
+            else
+              echo "::error::$ai_secret_name is empty in the Deploy on production server step"
+            fi
+          done
           # 配置错误应在部署前失败，避免应用带着空值启动后静默关闭能力。
           if [[ -z "${QWEN_API_KEY//[[:space:]]/}" ]]; then
             echo '::error::QWEN_API_KEY is empty. Configure it as a secret in the production Environment.'
