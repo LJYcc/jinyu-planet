@@ -647,17 +647,22 @@ onBeforeUnmount(() => {
     color: #849791;
   }
 
-  :deep(table) {
-    display: block;
-    max-width: 100%;
+  :deep(.ai-chat-markdown__table-wrapper) {
+    width: 100%;
     margin: 1em 0;
     overflow-x: auto;
     border: 1px solid rgba(218, 235, 225, 0.2);
-    border-collapse: separate;
-    border-spacing: 0;
     border-radius: 8px;
     scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
     scrollbar-width: thin;
+  }
+
+  :deep(.ai-chat-markdown__table) {
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
   }
 
   :deep(th),

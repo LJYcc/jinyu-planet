@@ -15,10 +15,12 @@ const props = defineProps<{
   requestError: string;
   canRetry: boolean;
   deepThinkingAvailable?: boolean;
+  webSearchAvailable?: boolean;
 }>();
 
 const modelValue = defineModel<string>({ required: true });
 const deepThinking = defineModel<boolean>('deepThinking', { default: false });
+const webSearch = defineModel<boolean>('webSearch', { default: false });
 
 const emit = defineEmits<{
   send: [];
@@ -56,6 +58,8 @@ const suggestions = [
           :disabled="props.disabled"
           :deep-thinking-available="props.deepThinkingAvailable"
           v-model:deep-thinking="deepThinking"
+          :web-search-available="props.webSearchAvailable"
+          v-model:web-search="webSearch"
           @send="emit('send')"
           @stop="emit('stop')"
         />

@@ -58,12 +58,13 @@ export function streamAiConversationMessage(
   content: string,
   clientNonce: string,
   signal: AbortSignal,
-  deepThinking = false
+  deepThinking = false,
+  webSearch = false
 ) {
   return fetch(`/api/ai/conversations/${conversationId}/messages`, {
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, clientNonce, deepThinking })
+    body: JSON.stringify({ content, clientNonce, deepThinking, webSearch })
   });
 }

@@ -3,6 +3,7 @@ import { Loading, RefreshRight, WarningFilled } from '@element-plus/icons-vue';
 import planetIcon from '~/assets/logo/goldfish-planet-icon-tech.png';
 import AiMarkdownContent from '~/components/ai-chat/ai-markdown-content.vue';
 import AiMessageContent from '~/components/ai-chat/ai-message-content.vue';
+import AiSearchSources from '~/components/ai-chat/ai-search-sources.vue';
 import type { ChatMessage } from '~/types/ai-chat';
 
 // 消息区负责展示标题、消息和错误状态；发送、保存标题等业务操作由父组件处理。
@@ -217,6 +218,14 @@ defineExpose({ scrollToBottom });
           <p class="ai-chat-content__message-label">
             {{ message.role === 'user' ? '你' : '小鱼 AI 助理' }}
           </p>
+          <div
+            v-if="message.role === 'assistant' && message.searchStatus === 'searching'"
+            class="ai-chat-content__search-status"
+            role="status"
+          >
+            <el-icon class="is-loading"><loading /></el-icon>
+            正在联网搜索可靠来源...
+          </div>
           <span
             v-if="message.id === props.typingMessageId && !message.content && !message.reasoningContent"
             class="ai-chat-content__typing-cursor ai-chat-content__typing-cursor--waiting"
@@ -254,6 +263,10 @@ defineExpose({ scrollToBottom });
             :content="message.content"
             :content-parts="message.contentParts"
             :show-typing-cursor="message.id === props.typingMessageId && Boolean(message.content)"
+          />
+          <ai-search-sources
+            v-if="message.role === 'assistant' && message.searchSources?.length"
+            :sources="message.searchSources"
           />
         </div>
       </article>
@@ -460,6 +473,15 @@ defineExpose({ scrollToBottom });
   color: #b1c2bb;
   font-size: 12px;
   font-weight: 700;
+}
+
+.ai-chat-content__search-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: #b8eadb;
+  font-size: 12px;
 }
 
 .ai-chat-content__message-bubble {

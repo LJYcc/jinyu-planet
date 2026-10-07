@@ -17,7 +17,29 @@ export type PublicAiMessage = AiMessageForModel & {
   reasoningContent: string | null;
   reasoningDurationMs: number | null;
   createdAt: string;
+  searchSources: Array<{ id: string; title: string; url: string; snippet?: string }>;
 };
+
+type SearchSource = { id: string; title: string; url: string; snippet?: string };
+
+function parseSearchSources(value: string | null | undefined): SearchSource[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(item => {
+      return (
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.id === 'string' &&
+        typeof item.title === 'string' &&
+        typeof item.url === 'string'
+      );
+    }) as SearchSource[];
+  } catch {
+    return [];
+  }
+}
 
 export type PublicAiConversation = {
   id: string;
@@ -51,6 +73,7 @@ function toPublicMessage(message: {
   content: string;
   reasoningContent: string | null;
   reasoningDurationMs: number | null;
+  searchSources?: string | null;
   createdAt: Date;
 }) {
   return {
@@ -59,6 +82,7 @@ function toPublicMessage(message: {
     content: message.content,
     reasoningContent: message.reasoningContent,
     reasoningDurationMs: message.reasoningDurationMs,
+    searchSources: parseSearchSources(message.searchSources),
     createdAt: message.createdAt.toISOString()
   } satisfies PublicAiMessage;
 }
@@ -130,6 +154,7 @@ export async function listAiMessages(visitorId: string, conversationId: string) 
       content: true,
       reasoningContent: true,
       reasoningDurationMs: true,
+      searchSources: true,
       createdAt: true
     }
   });
@@ -141,6 +166,7 @@ export async function listAiMessages(visitorId: string, conversationId: string) 
         content: string;
         reasoningContent: string | null;
         reasoningDurationMs: number | null;
+        searchSources: string | null;
         createdAt: Date;
       }
     )
@@ -222,7 +248,7 @@ export async function findAssistantAfterUser(conversationId: string, userCreated
       createdAt: { gt: userCreatedAt }
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { content: true, reasoningContent: true, reasoningDurationMs: true }
+    select: { content: true, reasoningContent: true, reasoningDurationMs: true, searchSources: true }
   });
 }
 
@@ -231,7 +257,8 @@ export async function createAssistantMessage(
   conversationId: string,
   content: string,
   reasoningContent: string,
-  reasoningDurationMs: number | null
+  reasoningDurationMs: number | null,
+  searchSources: SearchSource[] = []
 ) {
   // assistant 内容只有在上游流完整结束后才写入，避免数据库出现看似完整的半截回答。
   return prisma.$transaction(async transaction => {
@@ -241,7 +268,8 @@ export async function createAssistantMessage(
         role: 'assistant',
         content,
         reasoningContent: reasoningContent || null,
-        reasoningDurationMs
+        reasoningDurationMs,
+        searchSources: searchSources.length ? JSON.stringify(searchSources) : null
       },
       select: {
         id: true,
@@ -249,6 +277,7 @@ export async function createAssistantMessage(
         content: true,
         reasoningContent: true,
         reasoningDurationMs: true,
+        searchSources: true,
         createdAt: true
       }
     });
@@ -260,6 +289,7 @@ export async function createAssistantMessage(
         content: string;
         reasoningContent: string | null;
         reasoningDurationMs: number | null;
+        searchSources: string | null;
         createdAt: Date;
       }
     );
