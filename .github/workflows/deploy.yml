@@ -98,11 +98,24 @@ jobs:
           QWEN_BASE_URL: ${{ secrets.QWEN_BASE_URL }}
           QWEN_MODEL: ${{ secrets.QWEN_MODEL }}
           QWEN_TIMEOUT_MS: ${{ secrets.QWEN_TIMEOUT_MS }}
-          QWEN_DEEP_THINKING_ENABLED: ${{ secrets.QWEN_DEEP_THINKING_ENABLED }}
-          QWEN_WEB_SEARCH_ENABLED: ${{ secrets.QWEN_WEB_SEARCH_ENABLED }}
+          # 开关也允许配置在 Environment Variables；Secrets 优先，Variables 兜底。
+          QWEN_DEEP_THINKING_ENABLED: ${{ secrets.QWEN_DEEP_THINKING_ENABLED || vars.QWEN_DEEP_THINKING_ENABLED }}
+          QWEN_WEB_SEARCH_ENABLED: ${{ secrets.QWEN_WEB_SEARCH_ENABLED || vars.QWEN_WEB_SEARCH_ENABLED }}
         shell: bash
         run: |
           set -euo pipefail
+          # 配置错误应在部署前失败，避免应用带着空值启动后静默关闭能力。
+          if [[ -z "${QWEN_API_KEY//[[:space:]]/}" ]]; then
+            echo '::error::QWEN_API_KEY is empty. Configure it as a secret in the production Environment.'
+            exit 1
+          fi
+          for ai_flag_name in QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
+            ai_flag_value="${!ai_flag_name}"
+            if [[ "$ai_flag_value" != 'true' && "$ai_flag_value" != 'false' ]]; then
+              echo "::error::$ai_flag_name must be exactly true or false; received an empty or invalid value."
+              exit 1
+            fi
+          done
           install -d -m 700 ~/.ssh
           # 强制校验服务器主机公钥，避免 SSH 连接遭遇中间人替换。
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
@@ -161,6 +174,18 @@ jobs:
             docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml logs --tail=100 jinyu-planet
             exit 1
           fi
+
+          echo "===== verifying AI runtime configuration ====="
+          # 只打印是否存在密钥和开关字面值，不输出任何凭据；部署成功即能确认容器实际收到的配置。
+          docker compose --env-file /tmp/jinyu-planet-deploy.env -f /opt/stack/jinyu-planet/docker-compose.yml exec -T jinyu-planet node -e '
+            const config = {
+              hasQwenApiKey: Boolean(process.env.QWEN_API_KEY?.trim()),
+              deepThinkingEnabled: process.env.QWEN_DEEP_THINKING_ENABLED ?? null,
+              webSearchEnabled: process.env.QWEN_WEB_SEARCH_ENABLED ?? null
+            };
+            console.log(JSON.stringify(config));
+            if (!config.hasQwenApiKey || !["true", "false"].includes(config.deepThinkingEnabled) || !["true", "false"].includes(config.webSearchEnabled)) process.exit(1);
+          '
 
           echo "===== reloading reverse proxy ====="
           # 复用已有 Nginx 服务；IP:3000 预览不依赖 Nginx，但正式域名访问会使用它。
