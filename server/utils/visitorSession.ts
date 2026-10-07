@@ -6,7 +6,7 @@
  */
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { H3Event } from 'h3';
-import { getCookie, setCookie } from 'h3';
+import { getCookie, getRequestProtocol, setCookie } from 'h3';
 
 // Cookie 里保存的是原始令牌；数据库只保存它的哈希值。
 export const VISITOR_SESSION_COOKIE = 'goldfish_visitor_session';
@@ -67,8 +67,8 @@ export function setSessionTokenToCookie(event: H3Event, token: string) {
   setCookie(event, VISITOR_SESSION_COOKIE, token, {
     // HttpOnly 让浏览器脚本无法读取令牌，降低 XSS 窃取会话的风险。
     httpOnly: true,
-    // 本地 HTTP 开发不能开启 Secure；生产环境必须只通过 HTTPS 发送。
-    secure: process.env.NODE_ENV === 'production',
+    // 按浏览器实际访问协议设置；反向代理的 X-Forwarded-Proto 由 h3 统一识别。
+    secure: getRequestProtocol(event) === 'https',
     // Lax 允许正常站内导航，同时减少跨站请求携带 Cookie 的机会。
     sameSite: 'lax',
     // 让整个站点的 API 和页面都能使用同一个匿名会话。

@@ -19,7 +19,7 @@ import {
   streamAiConversationMessage,
   updateAiConversation
 } from '~/services/ai-conversation-api';
-import type { ChatMessage, ChatRole, Conversation, StreamEvent } from '~/types/ai-chat';
+import type { AiSearchSource, ChatMessage, ChatRole, Conversation, StreamEvent } from '~/types/ai-chat';
 
 // 这个组件是 AI 聊天的控制器：负责会话、请求、流式解析和错误状态。
 // 视觉展示与输入交互分别交给三个子组件，避免把业务流程和页面结构混在一起。
@@ -46,6 +46,8 @@ const lastFailedNonce = ref('');
 const typingMessageId = ref<string>();
 const isDeepThinkingAvailable = ref(false);
 const isDeepThinkingEnabled = ref(false);
+const isWebSearchAvailable = ref(false);
+const isWebSearchEnabled = ref(false);
 const loadingConversationTitle = ref<string>();
 const isSidebarCollapsed = ref(false);
 let abortController: AbortController | undefined;
@@ -77,7 +79,8 @@ function createMessage(
   content: string,
   createdAt?: string,
   reasoningContent?: string | null,
-  reasoningDurationMs?: number | null
+  reasoningDurationMs?: number | null,
+  searchSources?: AiSearchSource[]
 ): ChatMessage {
   return {
     id: uuidv4(),
@@ -85,6 +88,7 @@ function createMessage(
     content,
     reasoningContent,
     reasoningDurationMs,
+    searchSources,
     createdAt
   };
 }
@@ -106,6 +110,14 @@ function getApiError(error: unknown) {
 
   if (payload?.code === 'AI_THINKING_UNAVAILABLE') {
     return '当前 AI 服务暂不支持深度思考。';
+  }
+
+  if (payload?.code === 'AI_SEARCH_UNAVAILABLE') {
+    return '联网搜索服务尚未配置。';
+  }
+
+  if (payload?.code === 'AI_SEARCH_FAILED') {
+    return '联网搜索暂时不可用，请稍后重试。';
   }
 
   if (error instanceof Error && error.message) {
@@ -471,6 +483,15 @@ async function consumeStream(response: Response, assistantMessage: ChatMessage, 
           renderer.append(streamEvent.content, 'content');
         }
 
+        if (streamEvent.type === 'search_started') {
+          assistantMessage.searchStatus = 'searching';
+        }
+
+        if (streamEvent.type === 'search_results') {
+          assistantMessage.searchSources = streamEvent.sources || [];
+          assistantMessage.searchStatus = 'completed';
+        }
+
         if (streamEvent.type === 'error') {
           throw new Error(parseStreamError(streamEvent));
         }
@@ -530,7 +551,8 @@ async function requestReply(content: string, isRetry = false) {
       message,
       clientNonce,
       currentAbortController.signal,
-      isDeepThinkingEnabled.value
+      isDeepThinkingEnabled.value,
+      isWebSearchEnabled.value
     );
 
     if (!response.ok) {
@@ -658,6 +680,7 @@ onMounted(async () => {
     try {
       const capabilities = await getAiCapabilities();
       isDeepThinkingAvailable.value = capabilities.deepThinking;
+      isWebSearchAvailable.value = capabilities.webSearch;
     } catch {
       isDeepThinkingAvailable.value = false;
     }
@@ -704,6 +727,8 @@ onBeforeUnmount(stopGenerating);
         :request-error="requestError"
         :can-retry="Boolean(lastFailedMessage)"
         :deep-thinking-available="isDeepThinkingAvailable"
+        :web-search-available="isWebSearchAvailable"
+        v-model:web-search="isWebSearchEnabled"
         @send="sendMessage"
         @stop="stopGenerating"
         @retry="retryLastMessage"
@@ -729,6 +754,8 @@ onBeforeUnmount(stopGenerating);
           :is-sending="isSending"
           :disabled="isLoadingConversations || isLoadingHistory"
           :deep-thinking-available="isDeepThinkingAvailable"
+          :web-search-available="isWebSearchAvailable"
+          v-model:web-search="isWebSearchEnabled"
           @send="sendMessage"
           @stop="stopGenerating"
         />

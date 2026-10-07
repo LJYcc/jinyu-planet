@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MagicStick, Promotion, VideoPause } from '@element-plus/icons-vue';
+import { MagicStick, Promotion, Search, VideoPause } from '@element-plus/icons-vue';
 
 // 输入框内部只处理输入体验（Enter 发送、Shift+Enter 换行、停止按钮）。
 // 实际发送请求仍由父组件执行，因此这里不会重复实现 AI 请求逻辑。
@@ -7,10 +7,12 @@ const props = defineProps<{
   isSending: boolean;
   disabled?: boolean;
   deepThinkingAvailable?: boolean;
+  webSearchAvailable?: boolean;
 }>();
 
 const input = defineModel<string>({ required: true });
 const deepThinking = defineModel<boolean>('deepThinking', { default: false });
+const webSearch = defineModel<boolean>('webSearch', { default: false });
 
 const emit = defineEmits<{
   send: [];
@@ -46,20 +48,36 @@ function handleComposerKeydown(event: Event) {
         :disabled="isSending || props.disabled"
         @keydown="handleComposerKeydown"
       />
-      <el-button
-        v-if="props.deepThinkingAvailable"
-        class="ai-chat-composer__thinking-toggle"
-        :type="deepThinking ? 'primary' : 'default'"
-        :plain="!deepThinking"
-        :icon="MagicStick"
-        round
-        :disabled="isSending || props.disabled"
-        :aria-pressed="deepThinking"
-        aria-label="切换深度思考"
-        @click="deepThinking = !deepThinking"
-      >
-        深度思考
-      </el-button>
+      <div class="ai-chat-composer__tools">
+        <el-button
+          v-if="props.deepThinkingAvailable"
+          class="ai-chat-composer__thinking-toggle"
+          :type="deepThinking ? 'primary' : 'default'"
+          :plain="!deepThinking"
+          :icon="MagicStick"
+          round
+          :disabled="isSending || props.disabled"
+          :aria-pressed="deepThinking"
+          aria-label="切换深度思考"
+          @click="deepThinking = !deepThinking"
+        >
+          深度思考
+        </el-button>
+        <el-button
+          v-if="props.webSearchAvailable"
+          class="ai-chat-composer__search-toggle"
+          :type="webSearch ? 'primary' : 'default'"
+          :plain="!webSearch"
+          :icon="Search"
+          round
+          :disabled="isSending || props.disabled"
+          :aria-pressed="webSearch"
+          aria-label="切换联网搜索"
+          @click="webSearch = !webSearch"
+        >
+          联网搜索
+        </el-button>
+      </div>
       <el-button
         v-if="isSending"
         class="ai-chat-composer__action ai-chat-composer__action--stop"
@@ -121,10 +139,28 @@ function handleComposerKeydown(event: Event) {
 }
 
 .ai-chat-composer__thinking-toggle {
+  margin: 0;
+}
+
+.ai-chat-composer__tools {
+  display: flex;
   grid-row: 2;
   grid-column: 1;
-  align-self: center;
-  justify-self: start;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-chat-composer__search-toggle {
+  margin: 0;
+  border-color: rgba(129, 205, 187, 0.72);
+  color: #b8eadb;
+  background: rgba(30, 108, 94, 0.18);
+}
+
+.ai-chat-composer__search-toggle.el-button--primary {
+  border-color: #79d5bd;
+  color: #082b27;
+  background: #79d5bd;
 }
 
 .ai-chat-composer__thinking-toggle {
