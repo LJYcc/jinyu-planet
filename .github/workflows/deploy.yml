@@ -85,38 +85,41 @@ jobs:
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           TAG: ${{ steps.image.outputs.tag }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          # 连接目标和账号不是凭据，使用 production Environment Variables 管理。
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_PORT: ${{ vars.SSH_PORT }}
+          SSH_USERNAME: ${{ vars.SSH_USERNAME }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          # 主机公钥和 GHCR 用户名均可公开；令牌仍必须是 Secret。
+          SSH_KNOWN_HOSTS: ${{ vars.SSH_KNOWN_HOSTS }}
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SHADOW_DATABASE_URL: ${{ secrets.SHADOW_DATABASE_URL }}
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
-          QWEN_BASE_URL: ${{ secrets.QWEN_BASE_URL }}
-          QWEN_MODEL: ${{ secrets.QWEN_MODEL }}
-          QWEN_TIMEOUT_MS: ${{ secrets.QWEN_TIMEOUT_MS }}
-          # 开关也允许配置在 Environment Variables；Secrets 优先，Variables 兜底。
-          QWEN_DEEP_THINKING_ENABLED: ${{ secrets.QWEN_DEEP_THINKING_ENABLED || vars.QWEN_DEEP_THINKING_ENABLED }}
-          QWEN_WEB_SEARCH_ENABLED: ${{ secrets.QWEN_WEB_SEARCH_ENABLED || vars.QWEN_WEB_SEARCH_ENABLED }}
+          # 模型行为和服务地址不包含凭据，使用 production Environment Variables。
+          QWEN_BASE_URL: ${{ vars.QWEN_BASE_URL }}
+          QWEN_MODEL: ${{ vars.QWEN_MODEL }}
+          QWEN_TIMEOUT_MS: ${{ vars.QWEN_TIMEOUT_MS }}
+          QWEN_DEEP_THINKING_ENABLED: ${{ vars.QWEN_DEEP_THINKING_ENABLED }}
+          QWEN_WEB_SEARCH_ENABLED: ${{ vars.QWEN_WEB_SEARCH_ENABLED }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "===== checking GitHub Environment secret injection ====="
-          # 只输出是否存在和长度，不输出 Secret 内容；若这里为 false，问题发生在 GitHub 配置层而非 Docker。
-          for ai_secret_name in QWEN_API_KEY QWEN_BASE_URL QWEN_MODEL QWEN_TIMEOUT_MS QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
-            ai_secret_value="${!ai_secret_name:-}"
-            if [[ -n "$ai_secret_value" ]]; then
-              echo "$ai_secret_name: present (length ${#ai_secret_value})"
+          echo "===== checking GitHub Environment configuration ====="
+          # 只输出配置名和是否存在，不输出任何值；缺失时在部署开始前直接失败。
+          for deploy_value_name in SSH_HOST SSH_PORT SSH_USERNAME SSH_PRIVATE_KEY SSH_KNOWN_HOSTS GHCR_USERNAME GHCR_TOKEN DATABASE_URL SHADOW_DATABASE_URL QWEN_API_KEY QWEN_BASE_URL QWEN_MODEL QWEN_TIMEOUT_MS QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
+            deploy_value="${!deploy_value_name:-}"
+            if [[ -n "$deploy_value" ]]; then
+              echo "$deploy_value_name: present"
             else
-              echo "::error::$ai_secret_name is empty in the Deploy on production server step"
+              echo "::error::$deploy_value_name is empty in the Deploy on production server step"
+              exit 1
             fi
           done
           # 配置错误应在部署前失败，避免应用带着空值启动后静默关闭能力。
           if [[ -z "${QWEN_API_KEY//[[:space:]]/}" ]]; then
-            echo '::error::QWEN_API_KEY is empty. Configure it as a secret in the production Environment.'
+            echo '::error::QWEN_API_KEY is empty. Configure it as a Secret in the production Environment.'
             exit 1
           fi
           for ai_flag_name in QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
