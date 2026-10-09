@@ -29,6 +29,8 @@ import {
   type AiModelMessage,
   type AiSearchSource
 } from '../../../../services/ai-client';
+import { findOwnedAiAttachments } from '../../../../repositories/file-asset-repository';
+import { toAiMessageAttachments } from '../../../../services/ai-message-attachments';
 
 const MAX_AI_REPLY_LENGTH = 1_000_000;
 const AI_SYSTEM_PROMPT = '你是金鱼星球的 AI 助理。请用清晰、诚实、易读的方式回答用户，不要编造无法确认的事实。';
@@ -63,11 +65,12 @@ export default defineApiHandler(async event => {
 
   const body = await readJsonBody<{
     content?: unknown;
+    attachmentIds?: unknown;
     clientNonce?: unknown;
     deepThinking?: unknown;
     webSearch?: unknown;
   }>(event);
-  const { content, clientNonce, deepThinking, webSearch } = validateCurrentMessage(body ?? {});
+  const { content, attachmentIds, clientNonce, deepThinking, webSearch } = validateCurrentMessage(body ?? {});
   if (deepThinking && !isDeepThinkingAvailable()) {
     apiError(503, 'AI_THINKING_UNAVAILABLE', 'Deep thinking is not available for the current AI service.');
   }
@@ -75,7 +78,19 @@ export default defineApiHandler(async event => {
     apiError(503, 'AI_SEARCH_UNAVAILABLE', 'Web search is not configured.');
   }
   // 用户消息先落库。即使模型随后失败，用户仍能通过同一 nonce 重试，而不会产生重复消息。
-  const userMessage = await createOrReuseUserMessage(session.visitor.id, conversationId, content, clientNonce);
+  // 不接受客户端提交的 OSS URL。所有附件都必须由当前匿名访客拥有、属于 AI 用途且仍可使用。
+  const attachments = await findOwnedAiAttachments(session.visitor.id, attachmentIds);
+  if (attachments.length !== attachmentIds.length || attachments.some(attachment => attachment.status === 'failed')) {
+    apiError(403, 'AI_ATTACHMENT_NOT_AVAILABLE', 'One or more attachments are unavailable.');
+  }
+
+  const userMessage = await createOrReuseUserMessage(
+    session.visitor.id,
+    conversationId,
+    content,
+    clientNonce,
+    attachmentIds
+  );
   if (!userMessage) apiError(404, 'AI_CONVERSATION_NOT_FOUND', 'Conversation was not found.');
 
   const existingAssistant = await findAssistantAfterUser(conversationId, userMessage.createdAt);
@@ -127,7 +142,12 @@ export default defineApiHandler(async event => {
         if (webSearch) enqueueIfOpen(controller, encodeEvent({ type: 'search_started' }));
 
         const history = await listRecentAiMessagesForModel(conversationId, MAX_AI_CONTEXT_MESSAGES);
-        const modelMessages: AiModelMessage[] = [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history];
+        const modelMessages: AiModelMessage[] = [{ role: 'system', content: AI_SYSTEM_PROMPT }];
+        for (const message of history) {
+          // 历史附件同样从数据库重新授权并按需要生成短期 URL，绝不复用过期签名 URL。
+          const messageAttachments = await toAiMessageAttachments(message.attachments);
+          modelMessages.push({ role: message.role, content: message.content, attachments: messageAttachments });
+        }
         try {
           upstream = await openAiStream(modelMessages, { enableThinking: deepThinking, enableSearch: webSearch });
         } catch (error) {

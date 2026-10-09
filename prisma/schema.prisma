@@ -31,6 +31,13 @@ enum AiMessageRole {
   assistant
 }
 
+enum FileAssetStatus {
+  uploaded
+  processing
+  ready
+  failed
+}
+
 // 不登录的访问者也需要稳定身份，供发帖归属和会话校验使用。
 model AnonymousVisitor {
   id         String           @id @default(uuid()) @db.Char(36)
@@ -41,6 +48,7 @@ model AnonymousVisitor {
   sessions   VisitorSession[]
   posts      Post[]
   aiConversations AiConversation[]
+  fileAssets     FileAsset[]
 
   @@map("anonymous_visitors")
 }
@@ -182,9 +190,48 @@ model AiMessage {
   createdAt      DateTime      @default(now()) @map("created_at")
 
   conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  assets       AiMessageAsset[]
 
   // user 消息使用 nonce 幂等；assistant 消息的 nonce 为空，MySQL 允许多个 NULL。
   @@unique([conversationId, clientNonce])
   @@index([conversationId, createdAt])
   @@map("ai_messages")
+}
+
+// 文件二进制保存在私有对象存储，数据库只保存归属、校验结果和对象键。
+// 该模型供 AI 附件和后续帖子图片上传共用，不把密钥或公开 URL 写入数据库。
+model FileAsset {
+  id           String          @id @default(uuid()) @db.Char(36)
+  visitorId    String          @map("visitor_id") @db.Char(36)
+  purpose      String          @db.VarChar(32)
+  status       FileAssetStatus @default(uploaded)
+  storageKey   String          @unique @map("storage_key") @db.VarChar(512)
+  originalName String          @map("original_name") @db.VarChar(255)
+  mimeType     String          @map("mime_type") @db.VarChar(120)
+  sizeBytes    Int             @map("size_bytes")
+  checksum     String?         @db.Char(64)
+  extractedText String?        @map("extracted_text") @db.LongText
+  extractionError String?      @map("extraction_error") @db.VarChar(300)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  visitor AnonymousVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  messageLinks AiMessageAsset[]
+
+  @@index([visitorId, purpose, createdAt])
+  @@map("file_assets")
+}
+
+// 消息与文件的关联独立存储，既保留发送顺序，也避免客户端伪造附件 ID 作为消息内容。
+model AiMessageAsset {
+  messageId String @map("message_id") @db.Char(36)
+  assetId   String @map("asset_id") @db.Char(36)
+  sortOrder Int    @default(0) @map("sort_order")
+
+  message AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  asset   FileAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([messageId, assetId])
+  @@index([assetId])
+  @@map("ai_message_assets")
 }

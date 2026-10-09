@@ -1,9 +1,9 @@
 /** DashScope 原生多模态流式适配器。 */
 
 export type AiModelMessage = {
-  // 外层 API 只传递纯文本历史；这里再转换为 DashScope 要求的内容数组。
   role: 'system' | 'user' | 'assistant';
   content: string;
+  attachments?: Array<{ type: 'image'; url: string } | { type: 'document'; name: string; text: string }>;
 };
 
 export type AiSearchSource = {
@@ -198,9 +198,33 @@ async function* readSseDeltas(
   }
 }
 
-function toDashScopeMessages(messages: AiModelMessage[]) {
-  // multimodal-generation 即使只发送文字，也要求 content 使用图文内容数组。
-  return messages.map(message => ({ role: message.role, content: [{ text: message.content }] }));
+type DashScopeContentItem = { text: string } | { image: string };
+
+type DashScopeMessage = {
+  role: AiModelMessage['role'];
+  content: DashScopeContentItem[];
+};
+
+function toDashScopeMessages(messages: AiModelMessage[]): DashScopeMessage[] {
+  // multimodal-generation 使用内容数组；文档文本带文件名边界，避免模型将其误认为用户指令。
+  return messages.map(message => {
+    const content: DashScopeContentItem[] = [];
+
+    if (message.content) {
+      content.push({ text: message.content });
+    }
+
+    for (const attachment of message.attachments ?? []) {
+      if (attachment.type === 'image') {
+        content.push({ image: attachment.url });
+        continue;
+      }
+
+      content.push({ text: `\n[附件：${attachment.name}]\n${attachment.text}\n[附件结束]` });
+    }
+
+    return { role: message.role, content };
+  });
 }
 
 /** 打开原生多模态 SSE；联网时显式请求真实搜索来源。 */

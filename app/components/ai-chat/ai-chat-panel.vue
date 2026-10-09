@@ -5,7 +5,7 @@
  * 这里集中管理当前会话、历史会话、消息流和请求状态；子组件只负责界面展示，
  * 通过 props 接收数据，并通过 emits 把用户操作交回本组件处理。
  */
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElMessage } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
 import { useVisitor } from '~/composables/useVisitor';
 import AiConversationSidebar from '~/components/ai-chat/ai-conversation-sidebar.vue';
@@ -19,7 +19,15 @@ import {
   streamAiConversationMessage,
   updateAiConversation
 } from '~/services/ai-conversation-api';
-import type { AiSearchSource, ChatMessage, ChatRole, Conversation, StreamEvent } from '~/types/ai-chat';
+import type {
+  AiAttachment,
+  AiSearchSource,
+  ChatMessage,
+  ChatRole,
+  Conversation,
+  StreamEvent,
+  PendingAiAttachment
+} from '~/types/ai-chat';
 
 // 这个组件是 AI 聊天的控制器：负责会话、请求、流式解析和错误状态。
 // 视觉展示与输入交互分别交给三个子组件，避免把业务流程和页面结构混在一起。
@@ -37,12 +45,14 @@ const messages = ref<ChatMessage[]>([]);
 const conversations = ref<Conversation[]>([]);
 const conversationId = ref<string>();
 const input = ref('');
+const pendingAttachments = ref<PendingAiAttachment[]>([]);
 const isLoadingConversations = ref(true);
 const isLoadingHistory = ref(false);
 const isSending = ref(false);
 const requestError = ref('');
 const lastFailedMessage = ref('');
 const lastFailedNonce = ref('');
+const lastFailedAttachments = ref<PendingAiAttachment[]>([]);
 const typingMessageId = ref<string>();
 const isDeepThinkingAvailable = ref(false);
 const isDeepThinkingEnabled = ref(false);
@@ -80,7 +90,8 @@ function createMessage(
   createdAt?: string,
   reasoningContent?: string | null,
   reasoningDurationMs?: number | null,
-  searchSources?: AiSearchSource[]
+  searchSources?: AiSearchSource[],
+  attachments?: AiAttachment[]
 ): ChatMessage {
   return {
     id: uuidv4(),
@@ -89,8 +100,24 @@ function createMessage(
     reasoningContent,
     reasoningDurationMs,
     searchSources,
+    attachments,
     createdAt
   };
+}
+
+/**
+ * 待发送附件可持有浏览器本地预览 URL；一旦进入消息列表，只保留已持久化的元数据。
+ * 这样新会话切换时输入框卸载并回收 blob URL，也不会影响已发送图片的显示。
+ */
+function toMessageAttachments(attachments: PendingAiAttachment[]): AiAttachment[] {
+  return attachments.map(attachment => {
+    return {
+      id: attachment.id,
+      originalName: attachment.originalName,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes
+    };
+  });
 }
 
 /** 将服务端错误转换为用户可以理解的提示文字。 */
@@ -273,24 +300,14 @@ async function saveConversationTitle(title: string) {
   }
 }
 
-/** 通过弹窗重命名侧栏中的会话。 */
-async function renameConversation(conversation: Conversation) {
+/** 保存侧栏重命名窗口提交的标题，并同步会话列表。 */
+async function renameConversation(conversation: Conversation, title: string) {
   try {
-    const result = await ElMessageBox.prompt('请输入新的会话标题。', '重命名会话', {
-      inputValue: conversation.title || '新对话',
-      confirmButtonText: '保存',
-      cancelButtonText: '取消',
-      inputValidator: value => {
-        return Boolean(value.trim()) || '标题不能为空。';
-      }
-    });
-    const updatedConversation = await updateAiConversation(conversation.id, { title: result.value.trim() });
+    const updatedConversation = await updateAiConversation(conversation.id, { title });
     replaceConversation(updatedConversation);
     ElMessage.success('标题已更新。');
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      requestError.value = getApiError(error);
-    }
+    requestError.value = getApiError(error);
   }
 }
 
@@ -304,29 +321,13 @@ async function togglePinConversation(conversation: Conversation) {
   }
 }
 
-/** 复制会话链接；实际分享权限仍由服务端和页面路由决定。 */
-async function shareConversation(conversation: Conversation) {
-  const shareUrl = `${window.location.origin}/ai-chat?conversation=${conversation.id}`;
-  try {
-    await navigator.clipboard.writeText(shareUrl);
-    ElMessage.success('会话链接已复制。');
-  } catch (error) {
-    requestError.value = getApiError(error);
-  }
-}
-
-/** 确认并批量删除选中的会话，必要时返回新对话页面。 */
+/** 删除已经在侧栏确认的选中会话，必要时返回新对话页面。 */
 async function removeSelectedConversations(conversationIds: string[]) {
   if (!conversationIds.length) {
     return;
   }
 
   try {
-    await ElMessageBox.confirm(`删除选中的 ${conversationIds.length} 个会话及其全部消息？`, '批量删除会话', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    });
     await Promise.all(
       conversationIds.map(id => {
         return deleteAiConversation(id);
@@ -512,7 +513,10 @@ async function consumeStream(response: Response, assistantMessage: ChatMessage, 
 /** 发送当前消息，负责幂等 nonce、乐观更新、流式渲染和失败回滚。 */
 async function requestReply(content: string, isRetry = false) {
   const message = content.trim();
-  if (!message || isSending.value || isLoadingHistory.value) {
+  const uploadedAttachments = isRetry
+    ? lastFailedAttachments.value
+    : pendingAttachments.value.filter(attachment => attachment.status === 'uploaded');
+  if ((!message && !uploadedAttachments.length) || isSending.value || isLoadingHistory.value) {
     return;
   }
 
@@ -527,14 +531,26 @@ async function requestReply(content: string, isRetry = false) {
   const clientNonce = isRetry && lastFailedNonce.value ? lastFailedNonce.value : uuidv4();
   if (!isRetry) {
     // 先乐观显示用户消息；标题规则与服务端一致，因而可以立即更新而不必等待刷新。
-    messages.value.push(createMessage('user', message));
-    updateConversationTitle(id, message);
+    messages.value.push(
+      createMessage(
+        'user',
+        message,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        toMessageAttachments(uploadedAttachments)
+      )
+    );
+    updateConversationTitle(id, message || '图片或文档附件');
   }
 
   input.value = '';
+  pendingAttachments.value = [];
   requestError.value = '';
   lastFailedMessage.value = message;
   lastFailedNonce.value = clientNonce;
+  lastFailedAttachments.value = uploadedAttachments;
   isSending.value = true;
   const currentRequest = ++requestSequence;
   const currentAbortController = new AbortController();
@@ -549,6 +565,7 @@ async function requestReply(content: string, isRetry = false) {
     const response = await streamAiConversationMessage(
       id,
       message,
+      uploadedAttachments.map(attachment => attachment.id),
       clientNonce,
       currentAbortController.signal,
       isDeepThinkingEnabled.value,
@@ -577,6 +594,7 @@ async function requestReply(content: string, isRetry = false) {
 
     lastFailedMessage.value = '';
     lastFailedNonce.value = '';
+    lastFailedAttachments.value = [];
   } catch (error) {
     const isStopped = currentAbortController.signal.aborted;
     if (currentRequest !== requestSequence) {
@@ -625,9 +643,11 @@ async function startNewConversation() {
   isSending.value = false;
   messages.value = [];
   input.value = '';
+  pendingAttachments.value = [];
   requestError.value = '';
   lastFailedMessage.value = '';
   lastFailedNonce.value = '';
+  lastFailedAttachments.value = [];
   typingMessageId.value = undefined;
   setConversationId();
   await updateConversationQuery();
@@ -644,14 +664,9 @@ async function selectConversation(id: string) {
   }
 }
 
-/** 确认并删除单个会话，删除当前会话后回到新对话页面。 */
+/** 删除已经在侧栏确认的单个会话；删除当前会话后回到新对话页面。 */
 async function deleteConversation(conversation: Conversation) {
   try {
-    await ElMessageBox.confirm(`删除“${conversation.title || '新对话'}”及其全部消息？`, '删除会话', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    });
     await deleteAiConversation(conversation.id);
     conversations.value = conversations.value.filter(item => {
       return item.id !== conversation.id;
@@ -663,9 +678,7 @@ async function deleteConversation(conversation: Conversation) {
 
     ElMessage.success('会话已删除。');
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      requestError.value = getApiError(error);
-    }
+    requestError.value = getApiError(error);
   }
 }
 
@@ -711,7 +724,6 @@ onBeforeUnmount(stopGenerating);
       @remove="deleteConversation"
       @rename="renameConversation"
       @toggle-pin="togglePinConversation"
-      @share="shareConversation"
       @remove-selected="removeSelectedConversations"
       @pin-selected="pinSelectedConversations"
       @toggle-collapse="isSidebarCollapsed = !isSidebarCollapsed"
@@ -721,14 +733,15 @@ onBeforeUnmount(stopGenerating);
       <ai-new-conversation
         v-if="isNewConversation"
         v-model="input"
+        v-model:attachments="pendingAttachments"
         v-model:deep-thinking="isDeepThinkingEnabled"
+        v-model:web-search="isWebSearchEnabled"
         :is-sending="isSending"
         :disabled="isLoadingConversations"
         :request-error="requestError"
         :can-retry="Boolean(lastFailedMessage)"
         :deep-thinking-available="isDeepThinkingAvailable"
         :web-search-available="isWebSearchAvailable"
-        v-model:web-search="isWebSearchEnabled"
         @send="sendMessage"
         @stop="stopGenerating"
         @retry="retryLastMessage"
@@ -750,12 +763,13 @@ onBeforeUnmount(stopGenerating);
         />
         <ai-chat-composer
           v-model="input"
+          v-model:attachments="pendingAttachments"
           v-model:deep-thinking="isDeepThinkingEnabled"
+          v-model:web-search="isWebSearchEnabled"
           :is-sending="isSending"
           :disabled="isLoadingConversations || isLoadingHistory"
           :deep-thinking-available="isDeepThinkingAvailable"
           :web-search-available="isWebSearchAvailable"
-          v-model:web-search="isWebSearchEnabled"
           @send="sendMessage"
           @stop="stopGenerating"
         />

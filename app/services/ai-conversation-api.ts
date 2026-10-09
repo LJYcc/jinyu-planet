@@ -56,6 +56,7 @@ export async function deleteAiConversation(conversationId: string) {
 export function streamAiConversationMessage(
   conversationId: string,
   content: string,
+  attachmentIds: string[],
   clientNonce: string,
   signal: AbortSignal,
   deepThinking = false,
@@ -65,6 +66,6 @@ export function streamAiConversationMessage(
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, clientNonce, deepThinking, webSearch })
+    body: JSON.stringify({ content, attachmentIds, clientNonce, deepThinking, webSearch })
   });
 }

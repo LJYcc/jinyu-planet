@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CircleClose, Delete, Edit, Expand, Fold, MoreFilled, Plus, Select, Share, Top } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import moment from 'moment';
 import logoLight from '~/assets/logo/goldfish-planet-logo-light-tech.png';
 import type { Conversation } from '~/types/ai-chat';
@@ -19,9 +20,8 @@ const emit = defineEmits<{
   create: [];
   select: [conversationId: string];
   remove: [conversation: Conversation];
-  rename: [conversation: Conversation];
+  rename: [conversation: Conversation, title: string];
   togglePin: [conversation: Conversation];
-  share: [conversation: Conversation];
   enterMultiSelect: [];
   removeSelected: [conversationIds: string[]];
   pinSelected: [conversationIds: string[]];
@@ -227,9 +227,77 @@ function clearSelection() {
   selectedIds.value = [];
 }
 
+/** 在侧栏内收集和校验新标题；保存共享会话数据仍由父组件处理。 */
+async function handleRename(conversation: Conversation) {
+  try {
+    const result = await ElMessageBox.prompt('请输入新的会话标题。', '重命名会话', {
+      inputValue: conversation.title || '新对话',
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputValidator: value => {
+        return Boolean(value.trim()) || '标题不能为空。';
+      }
+    });
+    emit('rename', conversation, result.value.trim());
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('重命名操作未完成。');
+    }
+  }
+}
+
+/** 复制当前访客可访问的会话定位链接，不修改任何共享会话状态。 */
+async function handleShare(conversation: Conversation) {
+  const shareUrl = `${window.location.origin}/ai-chat?conversation=${conversation.id}`;
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    ElMessage.success('会话链接已复制。');
+  } catch {
+    ElMessage.error('会话链接复制失败，请稍后重试。');
+  }
+}
+
+/** 在侧栏完成单个会话的删除确认，再交由父组件处理跨区域状态。 */
+async function handleRemove(conversation: Conversation) {
+  try {
+    await ElMessageBox.confirm(`删除“${conversation.title || '新对话'}”及其全部消息？`, '删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    });
+    emit('remove', conversation);
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('删除确认未完成。');
+    }
+  }
+}
+
+/** 多选状态属于侧栏；确认后将 ID 快照交给父组件批量删除。 */
+async function handleRemoveSelected() {
+  if (!selectedIds.value.length) {
+    return;
+  }
+
+  const conversationIds = [...selectedIds.value];
+  try {
+    await ElMessageBox.confirm(`删除选中的 ${conversationIds.length} 个会话及其全部消息？`, '批量删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    });
+    clearSelection();
+    emit('removeSelected', conversationIds);
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('批量删除确认未完成。');
+    }
+  }
+}
+
 function handleMenuCommand(conversation: Conversation, command: string) {
   if (command === 'rename') {
-    emit('rename', conversation);
+    void handleRename(conversation);
   }
 
   if (command === 'pin') {
@@ -237,7 +305,7 @@ function handleMenuCommand(conversation: Conversation, command: string) {
   }
 
   if (command === 'share') {
-    emit('share', conversation);
+    void handleShare(conversation);
   }
 
   if (command === 'multi-select') {
@@ -246,7 +314,7 @@ function handleMenuCommand(conversation: Conversation, command: string) {
   }
 
   if (command === 'delete') {
-    emit('remove', conversation);
+    void handleRemove(conversation);
   }
 }
 
@@ -520,10 +588,7 @@ onBeforeUnmount(() => {
         text
         type="danger"
         :disabled="props.disabled"
-        @click="
-          emit('removeSelected', selectedIds);
-          clearSelection();
-        "
+        @click="handleRemoveSelected"
       >
         删除
       </el-button>

@@ -15,11 +15,16 @@ type ProtectedRoute = {
 // 只有明确需要身份的写接口进入认证中间件，公开读取接口和 bootstrap 保持匿名可访问。
 const protectedRoutes: ProtectedRoute[] = [
   { method: 'POST', path: '/api/posts' },
-  { method: 'PATCH', path: '/api/visitors/nickname' }
+  { method: 'PATCH', path: '/api/visitors/nickname' },
+  { method: 'POST', path: '/api/uploads' }
 ];
 
 /** 判断当前请求是否属于需要匿名会话的受保护路由。 */
 function isProtectedRoute(method: string, path: string) {
+  if (path === '/api/uploads' || path.startsWith('/api/uploads/')) {
+    return true;
+  }
+
   if (path === '/api/ai/conversations' || path.startsWith('/api/ai/conversations/')) {
     return true;
   }

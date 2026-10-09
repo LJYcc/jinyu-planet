@@ -8,6 +8,7 @@
 import { Compass, Connection, MagicStick, RefreshRight, WarningFilled } from '@element-plus/icons-vue';
 import planetIcon from '~/assets/logo/goldfish-planet-icon-start.png';
 import AiChatComposer from '~/components/ai-chat/ai-chat-composer.vue';
+import type { PendingAiAttachment } from '~/types/ai-chat';
 
 const props = defineProps<{
   isSending: boolean;
@@ -21,6 +22,7 @@ const props = defineProps<{
 const modelValue = defineModel<string>({ required: true });
 const deepThinking = defineModel<boolean>('deepThinking', { default: false });
 const webSearch = defineModel<boolean>('webSearch', { default: false });
+const attachments = defineModel<PendingAiAttachment[]>('attachments', { default: () => [] });
 
 const emit = defineEmits<{
   send: [];
@@ -54,6 +56,7 @@ const suggestions = [
       <div class="ai-new-conversation__composer">
         <ai-chat-composer
           v-model="modelValue"
+          v-model:attachments="attachments"
           :is-sending="props.isSending"
           :disabled="props.disabled"
           :deep-thinking-available="props.deepThinkingAvailable"
