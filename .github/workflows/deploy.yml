@@ -204,7 +204,8 @@ jobs:
           # 复用已有 Nginx 服务；IP:3000 预览不依赖 Nginx，但正式域名访问会使用它。
           docker compose -f /opt/stack/nginx/docker-compose.yml up -d --remove-orphans
 
-          echo "===== pruning unused image layers ====="
-          # 仅清理未被任何容器使用的镜像层，保留当前和仍在运行的镜像。
-          docker image prune -f
+          echo "===== pruning unused Docker images ====="
+          # 新版本已确认运行后，删除所有未被容器使用的旧镜像（包含带 SHA 标签的运行镜像和迁移镜像）。
+          # 正在运行的应用、Nginx 等容器所依赖的镜像会被 Docker 自动保留。
+          docker image prune -a -f
           EOF
