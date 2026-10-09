@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, ArrowRight, MagicStick, Paperclip, Promotion, Search, VideoPause } from '@element-plus/icons-vue';
+import { v4 as uuidv4 } from 'uuid';
 import AiAttachmentCards from '~/components/ai-chat/ai-attachment-cards.vue';
 import type { PendingAiAttachment } from '~/types/ai-chat';
 import { uploadAiAttachment } from '~/services/file-upload-api';
@@ -63,7 +64,7 @@ const emit = defineEmits<{
  * 输入框负责附件选择、上传、失败重试和移除；附件数组仍通过 v-model 归父级持有，
  * 以便页面控制器在发送、消息重试和切换会话时能够读取或整体清空待发送附件。
  */
-async function uploadAttachment(file: File, localId = `pending-${crypto.randomUUID()}`) {
+async function uploadAttachment(file: File, localId = `pending-${uuidv4()}`) {
   const existingAttachment = attachments.value.find(attachment => attachment.id === localId);
   if (existingAttachment) {
     existingAttachment.status = 'uploading';

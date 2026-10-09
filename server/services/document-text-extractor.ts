@@ -5,7 +5,6 @@
  * 均受限制，避免单份文件占满提示词；解析失败由调用方持久化状态供界面明确提示。
  */
 import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 
 export const MAX_DOCUMENT_EXTRACTED_CHARS = 24_000;
 export const DOCUMENT_CHUNK_CHARS = 3_000;
@@ -20,6 +19,9 @@ function normalizeText(value: string) {
 async function extractRawDocumentText(mimeType: string, data: Buffer) {
   let extracted: string;
   if (mimeType === 'application/pdf') {
+    // pdf-parse 会加载 Node 原生 Canvas 依赖；只在实际解析 PDF 时再加载，避免 PDF
+    // 解析环境异常影响纯文本、图片等不需要 PDF 解析的 AI 消息。
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ data });
     try {
       extracted = (await parser.getText()).text;
