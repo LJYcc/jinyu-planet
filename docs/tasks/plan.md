@@ -73,8 +73,8 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 - [x] Task 9 Phase 6.4.1：AI 附件消息契约与匿名归属校验
 - [x] Task 9 Phase 6.4.2：文档解析、多模态调用与受限 AI 上下文
 - [x] Task 9 Phase 6.4.3：附件上传、预览与聊天交互
-- [ ] Task 9 Phase 6.4.4：附件历史恢复与完整人工验证
-- [ ] Task 9 Phase 1-6：会话、历史、流式回答、前端状态与分阶段高级 AI 能力（[任务说明](task-09-qwen-chat-service.md)）
+- [x] Task 9 Phase 6.4.4：附件历史恢复与完整人工验证
+- [x] Task 9 Phase 1-6：会话、历史、流式回答、前端状态与分阶段高级 AI 能力（[任务说明](task-09-qwen-chat-service.md)）
 
 ### Checkpoint：首版完成
 
@@ -97,4 +97,5 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 - 匿名帖子首版直接公开，还是先写入 `pending`。
 - 对象存储的上传签名/公开 URL 规则。
 - 千问模型、额度、超时和错误重试策略。
+- 下一期为发帖标签增加候选推荐：管理员标记热门/推荐标签并通过人工排序控制顺序，下拉先展示未隐藏的热门标签，再展示普通已有标签，同时允许创建新标签；`Tag` 增加 `isFeatured`、`sortOrder`、`isHidden` 等治理字段，并补充读取 API 与受信任的维护流程。
 - 站内知识问答、来源引用和 Agent 工具调用属于 Task 9 之后的迭代。

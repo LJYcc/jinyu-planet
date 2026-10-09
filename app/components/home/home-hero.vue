@@ -11,7 +11,7 @@ import homeHeroBg from '~/assets/images/bg-home-night-mountain-hero.png';
   >
     <div class="shell-container home-hero__content relative z-[1] flex flex-1 flex-col justify-center pt-[78px]">
       <p class="eyebrow eyebrow--light">OPEN SPACE FOR SMALL THOUGHTS</p>
-      <h1 class="m-0 max-w-[720px] text-[54px] font-bold leading-[1.02] md:text-[92px]">
+      <h1 class="planet-hero-title m-0 max-w-[720px] text-[54px] font-bold leading-[1.02] md:text-[92px]">
         金鱼星球
         <em>GOLDFISH PLANET</em>
       </h1>
