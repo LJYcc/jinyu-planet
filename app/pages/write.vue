@@ -275,7 +275,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
     >
       <div class="shell-container write-hero__inner flex h-full min-h-0 flex-col justify-center pt-[82px]">
         <p class="eyebrow eyebrow--light">SHARE YOUR SIGNAL</p>
-        <h1 class="m-0 text-[50px] font-bold leading-[1.08] md:text-[76px]">投递新信号</h1>
+        <h1 class="planet-hero-title m-0 text-[50px] font-bold leading-[1.08] md:text-[76px]">投递新信号</h1>
         <p class="mt-[18px] mb-0 max-w-[620px] text-[19px] font-semibold leading-[1.8] text-[#f6f8f1]">
           把今天还没有答案的想法，安静地投进这颗星球。
         </p>

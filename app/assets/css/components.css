@@ -29,6 +29,49 @@
   background-size: cover;
 }
 
+/* 首屏标题使用缓慢掠过的亮色带和轻微呼吸感，营造星光闪烁而不影响阅读。 */
+.planet-hero-title {
+  color: transparent;
+  background: linear-gradient(
+    110deg,
+    #ffffff 0%,
+    #ffffff 38%,
+    #8fffe0 47%,
+    #fff7bf 52%,
+    #7debd1 57%,
+    #ffffff 66%,
+    #ffffff 100%
+  );
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: 0 0 0 rgba(115, 255, 220, 0);
+  animation: planet-hero-title-twinkle 5s ease-in-out infinite;
+}
+
+@keyframes planet-hero-title-twinkle {
+  0%,
+  100% {
+    background-position: 100% 50%;
+    text-shadow: 0 0 0 rgba(115, 255, 220, 0);
+  }
+
+  48% {
+    background-position: 0 50%;
+    text-shadow:
+      0 0 24px rgba(115, 255, 220, 0.72),
+      0 0 54px rgba(255, 247, 191, 0.28);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planet-hero-title {
+    color: #f7faf7;
+    background: none;
+    animation: none;
+  }
+}
+
 @media (max-width: 820px) {
   .page-photo-hero {
     height: 360px;

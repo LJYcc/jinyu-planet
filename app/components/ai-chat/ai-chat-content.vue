@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Loading, RefreshRight, WarningFilled } from '@element-plus/icons-vue';
-import planetIcon from '~/assets/logo/goldfish-planet-icon-tech.png';
+import assistantMascot from '~/assets/images/ai-assistant-planet-mascot.png';
 import AiMarkdownContent from '~/components/ai-chat/ai-markdown-content.vue';
 import AiMessageContent from '~/components/ai-chat/ai-message-content.vue';
 import AiSearchSources from '~/components/ai-chat/ai-search-sources.vue';
@@ -203,7 +203,7 @@ defineExpose({ scrollToBottom });
       >
         <img
           v-if="message.role === 'assistant'"
-          :src="planetIcon"
+          :src="assistantMascot"
           class="ai-chat-content__message-avatar"
           alt="小鱼 AI 助理头像"
         />

@@ -127,7 +127,7 @@ watch(
     >
       <div class="shell-container posts-hero__inner flex h-full min-h-0 flex-col justify-center pt-[82px]">
         <p class="eyebrow eyebrow--light">A SMALLER BRIGHTER PLACE</p>
-        <h1 class="m-0 text-[50px] font-bold leading-[1.05] md:text-[76px]">星球广场</h1>
+        <h1 class="planet-hero-title m-0 text-[50px] font-bold leading-[1.05] md:text-[76px]">星球广场</h1>
         <p class="mt-[15px] mb-[26px] max-w-[560px] text-[19px] font-semibold leading-[1.8] text-[#f6f8f1]">
           把想说的话，投进一颗小小的星球。
         </p>

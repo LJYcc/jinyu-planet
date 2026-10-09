@@ -37,8 +37,8 @@ const welcomeItems = [
       }"
     >
       <div class="shell-container about-hero__inner flex h-full min-h-0 flex-col justify-center pt-[82px]">
-        <p class="eyebrow eyebrow--light">关于星球</p>
-        <h1 class="m-0 max-w-[920px] text-[46px] font-bold leading-[1.18] md:text-[70px]">
+        <p class="eyebrow eyebrow--light">ABOUT GOLDFISH PLANET</p>
+        <h1 class="planet-hero-title m-0 max-w-[920px] text-[46px] font-bold leading-[1.18] md:text-[70px]">
           一个可以短暂停靠的数字星球
         </h1>
         <p class="mt-[24px] mb-0 max-w-[650px] text-[17px] font-semibold leading-[1.9] text-[#f6f8f1] md:text-[20px]">
