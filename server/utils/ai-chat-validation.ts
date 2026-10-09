@@ -11,6 +11,7 @@ export const MAX_AI_CONTEXT_MESSAGES = 20;
 
 type CurrentMessageInput = {
   content?: unknown;
+  attachmentIds?: unknown;
   clientNonce?: unknown;
   deepThinking?: unknown;
   webSearch?: unknown;
@@ -28,8 +29,13 @@ export function validateCurrentMessage(input: CurrentMessageInput) {
   }
 
   const content = input.content.trim();
-  if (!content || content.length > MAX_AI_MESSAGE_LENGTH) {
+  if (content.length > MAX_AI_MESSAGE_LENGTH) {
     apiError(400, 'INVALID_AI_MESSAGE', `Message content must be between 1 and ${MAX_AI_MESSAGE_LENGTH} characters.`);
+  }
+
+  const attachmentIds = validateAttachmentIds(input.attachmentIds);
+  if (!content && !attachmentIds.length) {
+    apiError(400, 'INVALID_AI_MESSAGE', 'Message text or an attachment is required.');
   }
 
   if (typeof input.clientNonce !== 'string' || input.clientNonce.length > 64) {
@@ -46,10 +52,25 @@ export function validateCurrentMessage(input: CurrentMessageInput) {
 
   return {
     content,
+    attachmentIds,
     clientNonce: input.clientNonce,
     deepThinking: input.deepThinking === true,
     webSearch: input.webSearch === true
   };
+}
+
+function validateAttachmentIds(value: unknown) {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || value.length > 6) {
+    apiError(400, 'INVALID_AI_ATTACHMENTS', 'A message can include up to 6 attachments.');
+  }
+  const ids = value.filter((id): id is string => typeof id === 'string');
+  if (ids.length !== value.length || ids.some(id => !/^[0-9a-f-]{36}$/i.test(id)) || new Set(ids).size !== ids.length) {
+    apiError(400, 'INVALID_AI_ATTACHMENTS', 'Attachment ids must be unique UUID values.');
+  }
+  return ids;
 }
 
 /** 只接受路由参数中的 UUID，避免把任意字符串带入数据库查询。 */

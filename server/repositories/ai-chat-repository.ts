@@ -7,17 +7,34 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../utils/prisma';
 
+export type AiModelAttachment = {
+  id: string;
+  storageKey: string;
+  originalName: string;
+  mimeType: string;
+  extractedText: string | null;
+};
+
 export type AiMessageForModel = {
   role: 'user' | 'assistant';
   content: string;
+  attachments: AiModelAttachment[];
 };
 
-export type PublicAiMessage = AiMessageForModel & {
+export type PublicAiAttachment = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type PublicAiMessage = Omit<AiMessageForModel, 'attachments'> & {
   id: string;
   reasoningContent: string | null;
   reasoningDurationMs: number | null;
   createdAt: string;
   searchSources: Array<{ id: string; title: string; url: string; snippet?: string }>;
+  attachments: PublicAiAttachment[];
 };
 
 type SearchSource = { id: string; title: string; url: string; snippet?: string };
@@ -75,6 +92,7 @@ function toPublicMessage(message: {
   reasoningDurationMs: number | null;
   searchSources?: string | null;
   createdAt: Date;
+  assets?: Array<{ asset: PublicAiAttachment }>;
 }) {
   return {
     id: message.id,
@@ -83,6 +101,12 @@ function toPublicMessage(message: {
     reasoningContent: message.reasoningContent,
     reasoningDurationMs: message.reasoningDurationMs,
     searchSources: parseSearchSources(message.searchSources),
+    attachments: (message.assets ?? []).map(({ asset }) => ({
+      id: asset.id,
+      originalName: asset.originalName,
+      mimeType: asset.mimeType,
+      sizeBytes: asset.sizeBytes
+    })),
     createdAt: message.createdAt.toISOString()
   } satisfies PublicAiMessage;
 }
@@ -155,6 +179,10 @@ export async function listAiMessages(visitorId: string, conversationId: string) 
       reasoningContent: true,
       reasoningDurationMs: true,
       searchSources: true,
+      assets: {
+        orderBy: { sortOrder: 'asc' },
+        select: { asset: { select: { id: true, originalName: true, mimeType: true, sizeBytes: true } } }
+      },
       createdAt: true
     }
   });
@@ -168,6 +196,7 @@ export async function listAiMessages(visitorId: string, conversationId: string) 
         reasoningDurationMs: number | null;
         searchSources: string | null;
         createdAt: Date;
+        assets: Array<{ asset: PublicAiAttachment }>;
       }
     )
   );
@@ -182,9 +211,22 @@ export async function listRecentAiMessagesForModel(
     where: { conversationId },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit,
-    select: { role: true, content: true }
+    select: {
+      role: true,
+      content: true,
+      assets: {
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          asset: { select: { id: true, storageKey: true, originalName: true, mimeType: true, extractedText: true } }
+        }
+      }
+    }
   });
-  return messages.reverse().map(message => ({ role: message.role, content: message.content }));
+  return messages.reverse().map(message => ({
+    role: message.role,
+    content: message.content,
+    attachments: message.assets.map(link => link.asset)
+  }));
 }
 
 type UserMessageResult = {
@@ -198,7 +240,8 @@ export async function createOrReuseUserMessage(
   visitorId: string,
   conversationId: string,
   content: string,
-  clientNonce: string
+  clientNonce: string,
+  attachmentIds: string[] = []
 ): Promise<UserMessageResult | null> {
   const conversation = await findOwnedAiConversation(visitorId, conversationId);
   if (!conversation) return null;
@@ -212,14 +255,22 @@ export async function createOrReuseUserMessage(
   try {
     const message = await prisma.$transaction(async transaction => {
       const created = await transaction.aiMessage.create({
-        data: { conversationId, role: 'user', content, clientNonce },
+        data: {
+          conversationId,
+          role: 'user',
+          content,
+          clientNonce,
+          assets: attachmentIds.length
+            ? { create: attachmentIds.map((assetId, sortOrder) => ({ assetId, sortOrder })) }
+            : undefined
+        },
         select: { id: true, createdAt: true }
       });
       await transaction.aiConversation.update({
         where: { id: conversationId },
         data: {
           // 标题是首条用户消息的摘要。已有标题不可覆盖，后续消息只更新时间用于列表排序。
-          title: conversation.title ?? content.slice(0, 160),
+          title: conversation.title ?? (content || '图片或文档附件').slice(0, 160),
           updatedAt: new Date()
         }
       });

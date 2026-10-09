@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import AiMarkdownContent from '~/components/ai-chat/ai-markdown-content.vue';
-import type { AiMessageContentPart, ChatRole } from '~/types/ai-chat';
+import AiAttachmentCards from '~/components/ai-chat/ai-attachment-cards.vue';
+import type { AiAttachment, AiMessageContentPart, ChatRole } from '~/types/ai-chat';
 
 const props = defineProps<{
   role: ChatRole;
   content: string;
   contentParts?: AiMessageContentPart[];
+  attachments?: AiAttachment[];
   showTypingCursor?: boolean;
 }>();
 
@@ -17,10 +19,24 @@ const displayParts = computed<AiMessageContentPart[]>(() => {
 
   return props.contentParts?.length ? props.contentParts : [{ type: 'markdown', markdown: props.content }];
 });
+
+const hasContent = computed(() => {
+  return props.content.trim().length > 0;
+});
 </script>
 
 <template>
   <div class="ai-message-content">
+    <div
+      v-if="props.attachments?.length"
+      class="ai-message-content__attachments"
+      :class="{ 'ai-message-content__attachments--with-content': hasContent }"
+    >
+      <ai-attachment-cards
+        :attachments="props.attachments"
+        wrap
+      />
+    </div>
     <template
       v-for="(part, index) in displayParts"
       :key="index"
@@ -43,5 +59,13 @@ const displayParts = computed<AiMessageContentPart[]>(() => {
 <style scoped lang="scss">
 .ai-message-content__text {
   margin: 0;
+}
+
+.ai-message-content__attachments {
+  margin-bottom: 0;
+}
+
+.ai-message-content__attachments--with-content {
+  margin-bottom: 10px;
 }
 </style>

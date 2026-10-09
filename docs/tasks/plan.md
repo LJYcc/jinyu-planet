@@ -69,6 +69,11 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 - [x] Task 9 Phase 6.1：KaTeX、Mermaid 与 TOML 富内容展示
 - [x] Task 9 Phase 6.2：千问深度思考与最终答案分离展示
 - [x] Task 9 Phase 6.3：千问原生多模态 `enable_search` 联网搜索与可信来源展示
+- [x] Task 9 Phase 6.4.0：私有 OSS 文件上传基础、匿名归属与文件安全校验
+- [x] Task 9 Phase 6.4.1：AI 附件消息契约与匿名归属校验
+- [x] Task 9 Phase 6.4.2：文档解析、多模态调用与受限 AI 上下文
+- [x] Task 9 Phase 6.4.3：附件上传、预览与聊天交互
+- [ ] Task 9 Phase 6.4.4：附件历史恢复与完整人工验证
 - [ ] Task 9 Phase 1-6：会话、历史、流式回答、前端状态与分阶段高级 AI 能力（[任务说明](task-09-qwen-chat-service.md)）
 
 ### Checkpoint：首版完成

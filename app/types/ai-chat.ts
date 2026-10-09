@@ -10,6 +10,21 @@ export type AiMessageContentPart =
       markdown: string;
     };
 
+export type AiAttachment = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type PendingAiAttachment = AiAttachment & {
+  status: 'uploading' | 'uploaded' | 'failed';
+  error?: string;
+  previewUrl?: string;
+  // File 只存在当前浏览器内存，用于上传失败后的重新上传；不会进入消息 API 或历史数据。
+  file?: File;
+};
+
 export type AiSearchSource = {
   id: string;
   title: string;
@@ -24,6 +39,7 @@ export type ChatMessage = {
   reasoningContent?: string | null;
   reasoningDurationMs?: number | null;
   contentParts?: AiMessageContentPart[];
+  attachments?: AiAttachment[];
   searchSources?: AiSearchSource[];
   searchStatus?: 'searching' | 'completed';
   createdAt?: string;

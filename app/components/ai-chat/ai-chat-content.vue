@@ -262,6 +262,7 @@ defineExpose({ scrollToBottom });
             :role="message.role"
             :content="message.content"
             :content-parts="message.contentParts"
+            :attachments="message.attachments"
             :show-typing-cursor="message.id === props.typingMessageId && Boolean(message.content)"
           />
           <ai-search-sources
