@@ -103,12 +103,17 @@ jobs:
           QWEN_TIMEOUT_MS: ${{ vars.QWEN_TIMEOUT_MS }}
           QWEN_DEEP_THINKING_ENABLED: ${{ vars.QWEN_DEEP_THINKING_ENABLED }}
           QWEN_WEB_SEARCH_ENABLED: ${{ vars.QWEN_WEB_SEARCH_ENABLED }}
+          ALI_OSS_BUCKET: ${{ vars.ALI_OSS_BUCKET }}
+          ALI_OSS_REGION: ${{ vars.ALI_OSS_REGION }}
+          ALI_OSS_ENDPOINT: ${{ vars.ALI_OSS_ENDPOINT }}
+          ALI_OSS_ACCESS_KEY_ID: ${{ secrets.ALI_OSS_ACCESS_KEY_ID }}
+          ALI_OSS_ACCESS_KEY_SECRET: ${{ secrets.ALI_OSS_ACCESS_KEY_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
           echo "===== checking GitHub Environment configuration ====="
           # 只输出配置名和是否存在，不输出任何值；缺失时在部署开始前直接失败。
-          for deploy_value_name in SSH_HOST SSH_PORT SSH_USERNAME SSH_PRIVATE_KEY SSH_KNOWN_HOSTS GHCR_USERNAME GHCR_TOKEN DATABASE_URL SHADOW_DATABASE_URL QWEN_API_KEY QWEN_BASE_URL QWEN_MODEL QWEN_TIMEOUT_MS QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED; do
+          for deploy_value_name in SSH_HOST SSH_PORT SSH_USERNAME SSH_PRIVATE_KEY SSH_KNOWN_HOSTS GHCR_USERNAME GHCR_TOKEN DATABASE_URL SHADOW_DATABASE_URL QWEN_API_KEY QWEN_BASE_URL QWEN_MODEL QWEN_TIMEOUT_MS QWEN_DEEP_THINKING_ENABLED QWEN_WEB_SEARCH_ENABLED ALI_OSS_BUCKET ALI_OSS_REGION ALI_OSS_ENDPOINT ALI_OSS_ACCESS_KEY_ID ALI_OSS_ACCESS_KEY_SECRET; do
             deploy_value="${!deploy_value_name:-}"
             if [[ -n "$deploy_value" ]]; then
               echo "$deploy_value_name: present"
@@ -158,6 +163,11 @@ jobs:
           QWEN_TIMEOUT_MS=$QWEN_TIMEOUT_MS
           QWEN_DEEP_THINKING_ENABLED=$QWEN_DEEP_THINKING_ENABLED
           QWEN_WEB_SEARCH_ENABLED=$QWEN_WEB_SEARCH_ENABLED
+          ALI_OSS_BUCKET=$ALI_OSS_BUCKET
+          ALI_OSS_REGION=$ALI_OSS_REGION
+          ALI_OSS_ENDPOINT=$ALI_OSS_ENDPOINT
+          ALI_OSS_ACCESS_KEY_ID=$ALI_OSS_ACCESS_KEY_ID
+          ALI_OSS_ACCESS_KEY_SECRET=$ALI_OSS_ACCESS_KEY_SECRET
           ENVEOF
           chmod 600 /tmp/jinyu-planet-deploy.env
 
@@ -194,10 +204,15 @@ jobs:
             const config = {
               hasQwenApiKey: Boolean(process.env.QWEN_API_KEY?.trim()),
               deepThinkingEnabled: process.env.QWEN_DEEP_THINKING_ENABLED ?? null,
-              webSearchEnabled: process.env.QWEN_WEB_SEARCH_ENABLED ?? null
+              webSearchEnabled: process.env.QWEN_WEB_SEARCH_ENABLED ?? null,
+              hasOssBucket: Boolean(process.env.ALI_OSS_BUCKET?.trim()),
+              hasOssRegion: Boolean(process.env.ALI_OSS_REGION?.trim()),
+              hasOssEndpoint: Boolean(process.env.ALI_OSS_ENDPOINT?.trim()),
+              hasOssAccessKeyId: Boolean(process.env.ALI_OSS_ACCESS_KEY_ID?.trim()),
+              hasOssAccessKeySecret: Boolean(process.env.ALI_OSS_ACCESS_KEY_SECRET?.trim())
             };
             console.log(JSON.stringify(config));
-            if (!config.hasQwenApiKey || !["true", "false"].includes(config.deepThinkingEnabled) || !["true", "false"].includes(config.webSearchEnabled)) process.exit(1);
+            if (!config.hasQwenApiKey || !["true", "false"].includes(config.deepThinkingEnabled) || !["true", "false"].includes(config.webSearchEnabled) || !config.hasOssBucket || !config.hasOssRegion || !config.hasOssEndpoint || !config.hasOssAccessKeyId || !config.hasOssAccessKeySecret) process.exit(1);
           '
 
           echo "===== reloading reverse proxy ====="
