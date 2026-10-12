@@ -40,6 +40,9 @@ export default defineApiHandler(async event => {
   if (!/^[a-z0-9-]{1,32}$/.test(purpose)) {
     apiError(400, 'INVALID_UPLOAD_PURPOSE', 'The upload purpose is invalid.');
   }
+  if ((purpose === 'post-cover' || purpose === 'post-image') && !file.mimeType.startsWith('image/')) {
+    apiError(415, 'UNSUPPORTED_POST_IMAGE_TYPE', 'Post images must be images.');
+  }
 
   // 不能使用用户给出的文件名组成对象路径。访客 ID 隔离归属，UUID 避免重名覆盖与路径猜测。
   const storageKey = `${purpose}/${session.visitor.id}/${randomUUID()}${file.extension}`;

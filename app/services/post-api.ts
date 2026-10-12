@@ -10,12 +10,12 @@ export type ListPostsQuery = {
 };
 
 export type CreatePostInput = {
-  type: 'article' | 'short' | 'photo' | 'link';
   topic: string;
   title: string;
   contentHtml: string;
-  externalUrl: string;
   tags: string[];
+  coverAssetId: string | null;
+  bodyImageAssetIds: string[];
   clientNonce: string;
 };
 

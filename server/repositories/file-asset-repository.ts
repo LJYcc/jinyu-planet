@@ -59,6 +59,20 @@ export async function findOwnedFileAsset(visitorId: string, id: string) {
   return prisma.fileAsset.findFirst({ where: { id, visitorId } });
 }
 
+export async function findOwnedPostCover(visitorId: string, id: string) {
+  return prisma.fileAsset.findFirst({
+    where: { id, visitorId, purpose: 'post-cover', mimeType: { startsWith: 'image/' } },
+    select: { storageKey: true, mimeType: true }
+  });
+}
+
+export async function findOwnedPostImages(visitorId: string, ids: string[]) {
+  return prisma.fileAsset.findMany({
+    where: { id: { in: ids }, visitorId, purpose: 'post-image', mimeType: { startsWith: 'image/' } },
+    select: { id: true, storageKey: true }
+  });
+}
+
 /**
  * 批量读取指定访客的 AI 附件。调用方必须比较返回数量与请求数量，不能把缺失或
  * 他人附件悄悄忽略后继续请求模型，否则会造成权限判断不透明。

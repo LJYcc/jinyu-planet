@@ -39,138 +39,240 @@ watch(
 
 <style scoped lang="scss">
 .article-content {
-  color: #303938;
-  font-size: 16px;
-  line-height: 2;
+  color: var(--w-e-textarea-color, #333);
+  font-size: 14px;
+  line-height: 1.5;
+  padding-top: 20px;
+}
 
-  :deep(*) {
-    max-width: 100%;
-  }
+.article-content :deep(*) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
 
-  :deep(h1),
-  :deep(h2),
-  :deep(h3),
-  :deep(h4),
-  :deep(h5),
-  :deep(h6) {
-    margin: 2em 0 0.65em;
-    color: var(--ink);
-    font-weight: 700;
-    line-height: 1.35;
-  }
+.article-content :deep(p) {
+  margin: 15px 0;
+}
 
-  :deep(h1) {
-    font-size: 30px;
-  }
-  :deep(h2) {
-    font-size: 25px;
-  }
-  :deep(h3) {
-    font-size: 21px;
-  }
+.article-content :deep(h1),
+.article-content :deep(h2),
+.article-content :deep(h3),
+.article-content :deep(h4),
+.article-content :deep(h5),
+.article-content :deep(h6) {
+  margin: 20px 0;
+  font-weight: 700;
+  line-height: 1.5;
+}
 
-  :deep(p),
-  :deep(ul),
-  :deep(ol),
-  :deep(blockquote),
-  :deep(pre),
-  :deep(figure),
-  :deep(table) {
-    margin: 0 0 1.45em;
-  }
+.article-content :deep(h1) {
+  font-size: 2em;
+}
 
-  :deep(ul),
-  :deep(ol) {
-    padding-left: 1.55em;
-  }
-  :deep(li + li) {
-    margin-top: 0.35em;
-  }
+.article-content :deep(h2) {
+  font-size: 1.5em;
+}
 
-  :deep(a) {
-    color: var(--accent-deep);
-    font-weight: 700;
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-  }
+.article-content :deep(h3) {
+  font-size: 1.17em;
+}
 
-  :deep(blockquote) {
-    padding: 0.3em 1.1em;
-    border-left: 3px solid var(--accent);
-    color: #59635f;
-  }
+.article-content :deep(h4) {
+  font-size: 1em;
+}
 
-  :deep(pre) {
-    overflow-x: auto;
-    padding: 18px 20px;
-    color: #edf4ef;
-    background: var(--night);
-    font-family: 'Source Sans 3', ui-monospace, monospace;
-    line-height: 1.65;
-  }
+.article-content :deep(h5) {
+  font-size: 0.83em;
+}
 
-  :deep(code) {
-    padding: 0.08em 0.35em;
-    background: #e5e9e3;
-    font-family: 'Source Sans 3', ui-monospace, monospace;
-  }
+.article-content :deep(h6) {
+  font-size: 0.67em;
+}
 
-  :deep(pre code) {
-    padding: 0;
-    background: transparent;
-  }
+.article-content :deep(ul),
+.article-content :deep(ol),
+.article-content :deep(menu) {
+  margin: 15px 0;
+  padding: 0 0 0 40px;
+  list-style: revert;
+}
 
-  :deep(img) {
-    display: block;
-    width: auto;
-    max-height: 720px;
-    margin: 1.8em auto;
-    object-fit: contain;
-  }
+.article-content :deep(li) {
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+}
 
-  :deep(figure) {
-    margin-right: 0;
-    margin-left: 0;
-  }
-  :deep(figcaption) {
-    margin-top: -1em;
-    color: var(--muted);
-    font-size: 13px;
-    text-align: center;
-  }
+.article-content :deep(blockquote) {
+  margin: 10px 0;
+  padding: 10px;
+  border-left: 8px solid var(--w-e-textarea-selected-border-color, #b4d5ff);
+  color: inherit;
+  background-color: var(--w-e-textarea-slight-bg-color, #f5f2f0);
+  font-size: 100%;
+  line-height: 1.5;
+}
 
-  :deep(table) {
-    display: block;
-    overflow-x: auto;
-    border-collapse: collapse;
-  }
-  :deep(th),
-  :deep(td) {
-    min-width: 110px;
-    padding: 9px 12px;
-    border: 1px solid var(--line);
-    text-align: left;
-  }
-  :deep(th) {
-    background: #e9ece7;
-  }
+.article-content :deep(.w-e-textarea-divider) {
+  margin: 20px auto;
+  padding: 20px;
+  border-radius: 3px;
+}
+
+.article-content :deep(.w-e-textarea-divider hr) {
+  display: block;
+  height: 1px;
+  border: 0;
+  background-color: var(--w-e-textarea-border-color, #ccc);
+}
+
+/* 兼容早期已保存为裸 <hr> 的正文。 */
+.article-content :deep(hr) {
+  display: block;
+  height: 1px;
+  margin: 20px auto;
+  border: 0;
+  background-color: var(--w-e-textarea-border-color, #ccc);
+}
+
+.article-content :deep(a) {
+  color: var(--accent-deep, #356b62);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.article-content :deep(a:hover) {
+  color: var(--ink, #26322f);
+}
+
+.article-content :deep(pre) {
+  margin: 0;
+  font-family: monospace;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.article-content :deep(code) {
+  padding: 3px;
+  border-radius: 3px;
+  background-color: var(--w-e-textarea-slight-bg-color, #f5f2f0);
+  font-family: monospace;
+}
+
+.article-content :deep(pre > code) {
+  display: block;
+  overflow: auto;
+  margin: 0.5em 0;
+  padding: 1em;
+  border: 1px solid var(--w-e-textarea-slight-border-color, #e8e8e8);
+  border-radius: 4px;
+  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  text-indent: 0;
+  text-shadow: 0 1px #fff;
+  white-space: pre;
+  word-break: normal;
+  word-spacing: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+.article-content :deep(pre > code .token.comment),
+.article-content :deep(pre > code .token.cdata),
+.article-content :deep(pre > code .token.doctype),
+.article-content :deep(pre > code .token.prolog) {
+  color: #708090;
+}
+
+.article-content :deep(pre > code .token.punctuation) {
+  color: #999;
+}
+
+.article-content :deep(pre > code .token.boolean),
+.article-content :deep(pre > code .token.constant),
+.article-content :deep(pre > code .token.deleted),
+.article-content :deep(pre > code .token.number),
+.article-content :deep(pre > code .token.property),
+.article-content :deep(pre > code .token.symbol),
+.article-content :deep(pre > code .token.tag) {
+  color: #905;
+}
+
+.article-content :deep(pre > code .token.attr-name),
+.article-content :deep(pre > code .token.builtin),
+.article-content :deep(pre > code .token.char),
+.article-content :deep(pre > code .token.inserted),
+.article-content :deep(pre > code .token.selector),
+.article-content :deep(pre > code .token.string) {
+  color: #690;
+}
+
+.article-content :deep(pre > code .token.atrule),
+.article-content :deep(pre > code .token.attr-value),
+.article-content :deep(pre > code .token.keyword) {
+  color: #07a;
+}
+
+.article-content :deep(pre > code .token.class-name),
+.article-content :deep(pre > code .token.function) {
+  color: #dd4a68;
+}
+
+.article-content :deep(pre > code .token.important),
+.article-content :deep(pre > code .token.regex),
+.article-content :deep(pre > code .token.variable) {
+  color: #e90;
+}
+
+.article-content :deep(table) {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.article-content :deep(th),
+.article-content :deep(td) {
+  border: 1px solid var(--w-e-textarea-border-color, #ccc);
+  line-height: 1.5;
+  min-width: 30px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  padding: 3px 5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.article-content :deep(th) {
+  background-color: var(--w-e-textarea-slight-bg-color, #f5f2f0);
+  font-weight: 700;
+  text-align: center;
+}
+
+.article-content :deep(figure) {
+  max-width: 100%;
+  margin: 15px 0;
+}
+
+.article-content :deep(video) {
+  display: block;
+  max-width: 100%;
+  margin: 15px 0;
+}
+
+.article-content :deep(input[type='checkbox']) {
+  margin-right: 6px;
+  accent-color: var(--accent-deep, #356b62);
+}
+
+.article-content :deep(img),
+.article-content :deep(video) {
+  max-width: 100%;
 }
 
 .article-content__pending {
   margin: 0;
   color: var(--muted);
-}
-
-@media (max-width: 820px) {
-  .article-content {
-    font-size: 15px;
-  }
-  .article-content :deep(h1) {
-    font-size: 27px;
-  }
-  .article-content :deep(h2) {
-    font-size: 23px;
-  }
 }
 </style>

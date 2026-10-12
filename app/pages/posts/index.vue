@@ -5,14 +5,24 @@ import sideTopicImage from '~/assets/images/bg-night-mountain-stars.png';
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
 import PostList from '~/components/posts/post-list.vue';
+import { getPlanetStats } from '~/services/planet-api';
 import { listPosts } from '~/services/post-api';
 import { listTopics } from '~/services/topic-api';
 import type { PostListItem, PostsPage, PublicTopic } from '~/types/post';
+import type { PlanetStats } from '~/types/planet';
 import { postDisplayExcerpt, postDisplayTitle } from '~/utils/postDisplay';
 
 useSeoMeta({ title: '星球广场 | 金鱼星球', description: '浏览金鱼星球里的公开信号。' });
 
 const route = useRoute();
+const router = useRouter();
+const postsViewState = useState('posts-view-state', () => ({
+  keyword: '',
+  topic: '',
+  sort: 'latest' as 'latest' | 'featured',
+  page: 1,
+  scrollY: 0
+}));
 const topics = ref<PublicTopic[]>([]);
 const pageData = ref<PostsPage | null>(null);
 const keyword = ref('');
@@ -22,21 +32,59 @@ const currentPage = ref(1);
 const isLoading = ref(true);
 const loadError = ref('');
 const isFirstLoad = ref(true);
+const planetStats = ref<PlanetStats | null>(null);
+const isPlanetStatsLoading = ref(true);
+const planetStatsError = ref(false);
 const pageSize = 6;
 
 const heroPost = computed(() => pageData.value?.items[0] ?? null);
 const visiblePosts = computed(() => pageData.value?.items.slice(1) ?? []);
 const heroSectionLabel = computed(() => (selectedSort.value === 'featured' ? '精选信号' : '最新抵达'));
 const heroLabel = computed(() => (selectedSort.value === 'featured' ? '精选' : '最新'));
-const listLabel = computed(() => (selectedSort.value === 'featured' ? '更多精选' : '最新信号'));
+const listLabel = computed(() => (selectedSort.value === 'featured' ? '更多精选' : '继续探索'));
+const weeklyTopic = computed(() => {
+  if (!topics.value.length) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayFromMonday = (today.getDay() + 6) % 7;
+  today.setDate(today.getDate() - dayFromMonday);
+  const weekSeed = Math.floor(today.getTime() / 604_800_000);
+  const randomValue = Math.abs(Math.sin(weekSeed * 12.9898) * 43_758.5453) % 1;
+  return topics.value[Math.floor(randomValue * topics.value.length)];
+});
 
 function readRouteFilters() {
-  keyword.value = typeof route.query.q === 'string' ? route.query.q : '';
-  selectedTopic.value = typeof route.query.topic === 'string' ? route.query.topic : '';
-  selectedSort.value = route.query.sort === 'featured' ? 'featured' : 'latest';
+  keyword.value = typeof route.query.q === 'string' ? route.query.q : postsViewState.value.keyword;
+  selectedTopic.value = typeof route.query.topic === 'string' ? route.query.topic : postsViewState.value.topic;
+  selectedSort.value =
+    route.query.sort === 'featured' ? 'featured' : route.query.sort === 'latest' ? 'latest' : postsViewState.value.sort;
 
   const page = Number(route.query.page);
-  currentPage.value = Number.isInteger(page) && page > 0 ? page : 1;
+  currentPage.value = Number.isInteger(page) && page > 0 ? page : postsViewState.value.page;
+  postsViewState.value = {
+    keyword: keyword.value,
+    topic: selectedTopic.value,
+    sort: selectedSort.value,
+    page: currentPage.value,
+    scrollY: postsViewState.value.scrollY
+  };
+}
+
+function savePostsScroll() {
+  postsViewState.value.scrollY = window.scrollY;
+}
+
+function restorePostsScroll() {
+  const previousPath = router.options.history.state.back;
+  const scrollY = postsViewState.value.scrollY;
+  if (typeof previousPath !== 'string' || !/^\/posts\//.test(previousPath) || scrollY <= 0) return;
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'auto' }));
+    });
+  });
 }
 
 function postCover(post: PostListItem | null, index = 0) {
@@ -80,11 +128,31 @@ async function loadTopics() {
   }
 }
 
+async function loadPlanetStats() {
+  isPlanetStatsLoading.value = true;
+  planetStatsError.value = false;
+  try {
+    planetStats.value = await getPlanetStats();
+  } catch {
+    planetStats.value = null;
+    planetStatsError.value = true;
+  } finally {
+    isPlanetStatsLoading.value = false;
+  }
+}
+
 function applyFilters(overrides: { topic?: string; q?: string; page?: number; sort?: 'latest' | 'featured' }) {
   if (overrides.topic !== undefined) selectedTopic.value = overrides.topic;
   if (overrides.q !== undefined) keyword.value = overrides.q;
   if (overrides.sort !== undefined) selectedSort.value = overrides.sort;
   if (overrides.page !== undefined) currentPage.value = overrides.page;
+  postsViewState.value = {
+    keyword: keyword.value,
+    topic: selectedTopic.value,
+    sort: selectedSort.value,
+    page: currentPage.value,
+    scrollY: postsViewState.value.scrollY
+  };
   void loadPosts();
 }
 
@@ -106,8 +174,10 @@ function clearFilters() {
 
 onMounted(async () => {
   readRouteFilters();
-  await Promise.all([loadTopics(), loadPosts()]);
+  await Promise.all([loadTopics(), loadPosts(), loadPlanetStats()]);
+  restorePostsScroll();
 });
+onBeforeUnmount(savePostsScroll);
 watch(
   () => route.query,
   () => {
@@ -150,8 +220,11 @@ watch(
       </div>
     </section>
 
-    <section class="posts-board shell-container grid gap-8 py-[26px] lg:grid-cols-[minmax(0,1fr)_330px]">
-      <main class="posts-feed">
+    <section class="posts-board shell-container flex gap-8 py-[26px]">
+      <main
+        class="posts-feed"
+        :class="{ 'posts-feed--loading': isLoading && pageData }"
+      >
         <div class="posts-toolbar flex items-center gap-6">
           <form
             class="posts-filter__search"
@@ -205,135 +278,129 @@ watch(
             </button>
           </div>
         </div>
-        <div
-          v-if="isLoading"
-          class="posts-state flex min-h-[370px] flex-col items-center justify-center gap-[18px]"
-          role="status"
-          aria-live="polite"
-        >
-          <el-skeleton
-            :rows="6"
-            animated
-          />
-        </div>
-        <div
-          v-else-if="loadError"
-          class="posts-state flex min-h-[370px] flex-col items-center justify-center gap-[18px]"
-          role="alert"
-        >
-          <el-alert
-            :title="loadError"
-            type="error"
-            show-icon
-            :closable="false"
-          />
-          <el-button
-            type="primary"
-            @click="loadPosts"
-            >重新连接</el-button
-          >
-        </div>
-        <div
-          v-else-if="!pageData?.items.length"
-          class="posts-state flex min-h-[370px] flex-col items-center justify-center gap-[18px]"
-        >
-          <el-empty description="没有找到匹配的公开信号。">
-            <el-button
-              type="primary"
-              @click="clearFilters"
-              >清除筛选</el-button
-            >
-          </el-empty>
-        </div>
-        <template v-else>
+        <div class="posts-content">
           <div
-            class="posts-summary sr-only"
+            v-if="isLoading && !pageData"
+            class="posts-state flex min-h-[370px] flex-col items-center justify-center gap-[18px]"
+            role="status"
             aria-live="polite"
           >
-            共 {{ pageData.total }} 条公开信号
-          </div>
-          <section
-            v-if="heroPost"
-            class="posts-spotlight"
-            :aria-label="heroSectionLabel"
-          >
-            <div class="posts-section-head">
-              <h2>{{ heroSectionLabel }}</h2>
-            </div>
-            <nuxt-link
-              class="posts-spotlight__card"
-              :to="`/posts/${heroPost.slug}`"
-            >
-              <span class="posts-spotlight__image">
-                <span class="posts-spotlight__label">{{ heroLabel }}</span>
-                <img
-                  :src="postCover(heroPost)"
-                  :alt="heroPost.coverImage?.altText || heroPost.topic.name"
-                  loading="eager"
-                />
-              </span>
-              <span class="posts-spotlight__body">
-                <span class="posts-spotlight__topic">{{ heroPost.topic.name }}</span>
-                <strong>{{ postDisplayTitle(heroPost) }}</strong>
-                <span
-                  v-if="postDisplayExcerpt(heroPost)"
-                  class="posts-spotlight__excerpt"
-                  >{{ postDisplayExcerpt(heroPost) }}</span
-                >
-                <span class="posts-spotlight__meta">
-                  <span class="posts-meta-chip"># {{ heroPost.topic.name }}</span>
-                  <time :datetime="heroPost.publishedAt">{{ formatDate(heroPost.publishedAt) }}</time>
-                  <span>{{ heroPost.readingMinutes }} 分钟阅读</span>
-                  <span
-                    class="posts-spotlight__arrow"
-                    aria-hidden="true"
-                    >↗</span
-                  >
-                </span>
-              </span>
-            </nuxt-link>
-          </section>
-          <section
-            v-if="visiblePosts.length"
-            class="posts-list-section"
-            :aria-label="listLabel"
-          >
-            <div class="posts-section-head">
-              <h2>{{ listLabel }}</h2>
-            </div>
-            <post-list :posts="visiblePosts" />
-          </section>
-          <nav
-            v-if="pageData.totalPages > 1"
-            class="posts-pagination flex justify-center mt-4"
-            aria-label="信号分页"
-          >
-            <el-pagination
-              background
-              layout="prev, pager, next"
-              :current-page="pageData.page"
-              :page-size="pageData.pageSize"
-              :total="pageData.total"
-              @current-change="changePage"
+            <el-skeleton
+              :rows="6"
+              animated
             />
-          </nav>
-        </template>
+          </div>
+          <div
+            v-else-if="loadError"
+            class="posts-state flex min-h-[370px] flex-col items-center justify-center gap-[18px]"
+            role="alert"
+          >
+            <el-alert
+              :title="loadError"
+              type="error"
+              show-icon
+              :closable="false"
+            />
+            <el-button
+              type="primary"
+              @click="loadPosts"
+              >重新连接</el-button
+            >
+          </div>
+          <div
+            v-else-if="!pageData?.items.length"
+            class="posts-empty-state flex flex-col items-center justify-center gap-[18px]"
+          >
+            <el-empty description="没有找到匹配的公开信号。">
+              <el-button
+                type="primary"
+                @click="clearFilters"
+                >清除筛选</el-button
+              >
+            </el-empty>
+          </div>
+          <template v-else>
+            <section
+              class="posts-spotlight"
+              :aria-label="heroSectionLabel"
+            >
+              <div class="posts-section-head">
+                <h2>{{ heroSectionLabel }}</h2>
+              </div>
+              <nuxt-link
+                v-if="heroPost"
+                class="posts-spotlight__card"
+                :to="`/posts/${heroPost.slug}`"
+              >
+                <span class="posts-spotlight__image">
+                  <span class="posts-spotlight__label">{{ heroLabel }}</span>
+                  <img
+                    :src="postCover(heroPost)"
+                    :alt="heroPost.coverImage?.altText || heroPost.topic.name"
+                    loading="eager"
+                  />
+                </span>
+                <span class="posts-spotlight__body">
+                  <strong>{{ postDisplayTitle(heroPost) }}</strong>
+                  <span
+                    v-if="postDisplayExcerpt(heroPost)"
+                    class="posts-spotlight__excerpt"
+                    >{{ postDisplayExcerpt(heroPost) }}</span
+                  >
+                  <span class="posts-spotlight__meta">
+                    <span class="posts-meta-chip"># {{ heroPost.topic.name }}</span>
+                    <time :datetime="heroPost.publishedAt">{{ formatDate(heroPost.publishedAt) }}</time>
+                    <span>{{ heroPost.readingMinutes }} 分钟阅读</span>
+                    <span
+                      class="posts-spotlight__arrow"
+                      aria-hidden="true"
+                      >↗</span
+                    >
+                  </span>
+                </span>
+              </nuxt-link>
+            </section>
+            <section
+              class="posts-list-section"
+              :aria-label="listLabel"
+            >
+              <div class="posts-section-head">
+                <h2>{{ listLabel }}</h2>
+              </div>
+              <post-list :posts="visiblePosts" />
+            </section>
+            <div class="posts-pagination-slot">
+              <nav
+                v-if="pageData.totalPages > 1"
+                class="posts-pagination flex justify-center mt-4"
+                aria-label="信号分页"
+              >
+                <el-pagination
+                  background
+                  layout="prev, pager, next"
+                  :current-page="pageData.page"
+                  :page-size="pageData.pageSize"
+                  :total="pageData.total"
+                  @current-change="changePage"
+                />
+              </nav>
+            </div>
+          </template>
+        </div>
       </main>
 
       <aside class="posts-side">
         <section class="side-topic side-panel">
           <h2 class="side-panel__title"><span aria-hidden="true">#</span> 本周主题</h2>
-          <div class="side-topic__image">
-            <img
-              :src="sideTopicImage"
-              alt="星空下的山脉"
-            />
-          </div>
-          <h2 class="side-topic__name">山与日出</h2>
-          <p>分享你与山、与日出日落的故事。那些让你重新充满力量的瞬间。</p>
+          <img
+            :src="sideTopicImage"
+            :alt="weeklyTopic ? `${weeklyTopic.name}主题图片` : '本周主题图片'"
+          />
+          <h2 class="side-topic__name">{{ weeklyTopic?.name ?? '本周主题' }}</h2>
+          <p>{{ weeklyTopic?.description ?? '本周主题正在准备中。' }}</p>
           <nuxt-link
             v-slot="{ navigate }"
-            to="/write"
+            :to="weeklyTopic ? { path: '/write', query: { topic: weeklyTopic.slug } } : '/write'"
             custom
           >
             <el-button
@@ -350,18 +417,27 @@ watch(
           </h2>
           <div class="planet-status__grid">
             <div>
-              <strong>1.2k</strong>
+              <strong>{{ isPlanetStatsLoading ? '—' : (planetStats?.memberCount ?? '—').toLocaleString() }}</strong>
               <span>星球成员</span>
             </div>
             <div>
-              <strong>8.6k</strong>
+              <strong>{{ isPlanetStatsLoading ? '—' : (planetStats?.signalCount ?? '—').toLocaleString() }}</strong>
               <span>信号总数</span>
             </div>
             <div>
-              <strong>328</strong>
+              <strong>{{
+                isPlanetStatsLoading ? '—' : (planetStats?.weeklySignalCount ?? '—').toLocaleString()
+              }}</strong>
               <span>本周新增</span>
             </div>
           </div>
+          <p
+            v-if="planetStatsError"
+            class="planet-status__error"
+            role="status"
+          >
+            星球状态暂时无法读取
+          </p>
         </section>
         <section
           class="side-write"
@@ -406,14 +482,37 @@ watch(
   background-color: var(--night);
 }
 
-/* The square reference uses a compact two-column reading surface. */
-.posts-board {
-  grid-template-columns: minmax(0, 1fr) 330px;
+.posts-feed {
+  display: flex;
+  min-width: 0;
+  height: 800px;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
-.posts-feed {
-  padding: 0;
-  border: 0;
+.posts-feed--loading {
+  pointer-events: none;
+  cursor: wait;
+}
+
+.posts-empty-state {
+  min-height: 0;
+  flex: 1;
+}
+
+.posts-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.posts-pagination-slot {
+  display: flex;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: flex-end;
+  justify-content: center;
 }
 
 .posts-toolbar {
@@ -442,8 +541,6 @@ watch(
 }
 
 .posts-tabs {
-  gap: 0;
-  min-height: 38px;
   margin: 0;
   border: 0;
 }
@@ -474,24 +571,16 @@ watch(
   border-color: var(--accent);
 }
 
-.posts-spotlight {
-  margin: 16px 0 18px;
-}
-
 .posts-spotlight__card {
-  display: grid;
-  min-height: 0;
-  overflow: visible;
+  display: flex;
   color: var(--ink);
-  background: transparent;
-  border-radius: 0;
-  box-shadow: none;
-  grid-template-columns: minmax(260px, 43%) minmax(0, 1fr);
-  grid-template-rows: none;
+  gap: 22px;
+  padding: 9px 0;
 }
 
 .posts-spotlight__image {
   position: relative;
+  flex: 0 0 43%;
   min-height: 0;
   overflow: hidden;
   aspect-ratio: 2.85;
@@ -524,14 +613,10 @@ watch(
 
 .posts-spotlight__body {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   flex-direction: column;
-  gap: 0;
-  padding: 2px 0 0 22px;
-}
-
-.posts-spotlight__topic {
-  display: none;
+  padding: 2px 0 0;
 }
 
 .posts-spotlight__card strong {
@@ -591,9 +676,10 @@ watch(
 }
 
 .posts-section-head {
+  display: flex;
   position: relative;
-  min-height: 35px;
-  padding-left: 14px;
+  align-items: center;
+  padding: 10px 0 10px 14px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -616,7 +702,16 @@ watch(
   font-weight: 700;
 }
 
+.posts-list-section {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
 .posts-side {
+  width: 330px;
+  flex: 0 0 330px;
   position: sticky;
   top: 98px;
 }
@@ -641,10 +736,6 @@ watch(
   color: var(--accent-deep);
 }
 
-.side-topic .side-panel__title {
-  margin: 0 0 16px;
-}
-
 .side-topic img {
   display: block;
   width: 100%;
@@ -652,10 +743,6 @@ watch(
   aspect-ratio: 2.65;
   object-position: center 28%;
   object-fit: cover;
-  border-radius: 3px;
-}
-
-.side-topic__image {
   border-radius: 3px;
 }
 
@@ -712,6 +799,13 @@ watch(
   white-space: nowrap;
 }
 
+.planet-status__error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .side-write {
   min-height: 220px;
   margin-top: 18px;
@@ -749,11 +843,13 @@ watch(
 
 @media (max-width: 1024px) {
   .posts-board {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .posts-side {
     position: static;
+    width: auto;
+    flex-basis: auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -783,11 +879,13 @@ watch(
   }
 
   .posts-spotlight__card {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     gap: 14px;
   }
 
   .posts-spotlight__image {
+    flex-basis: auto;
+    width: 100%;
     aspect-ratio: 2.1;
   }
 
@@ -807,10 +905,6 @@ watch(
 @media (max-width: 500px) {
   .posts-board {
     width: min(var(--container), calc(100% - 32px));
-  }
-
-  .posts-spotlight__card strong {
-    font-size: 21px;
   }
 }
 </style>

@@ -115,8 +115,6 @@ const suggestions = [
   justify-content: center;
   overflow-y: auto;
   padding: 28px clamp(20px, 5vw, 72px);
-  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-  scrollbar-width: thin;
 }
 
 .ai-new-conversation__content {

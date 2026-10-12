@@ -4,6 +4,7 @@ import {
   findActiveTopicBySlug,
   findPostByVisitorAndNonce
 } from '../../repositories/postRepository';
+import { findOwnedPostCover, findOwnedPostImages } from '../../repositories/file-asset-repository';
 import { touchVisitorSession } from '../../repositories/visitorRepository';
 import { apiError, apiSuccess, defineApiHandler } from '../../utils/apiResponse';
 import { getVisitorSession } from '../../utils/auth';
@@ -42,11 +43,31 @@ export default defineApiHandler(async event => {
   const topic = await findActiveTopicBySlug(input.topicSlug);
   if (!topic) apiError(400, 'TOPIC_UNAVAILABLE', 'The selected topic is unavailable.');
 
+  const cover = input.coverAssetId ? await findOwnedPostCover(session.visitor.id, input.coverAssetId) : null;
+  if (input.coverAssetId && !cover) apiError(400, 'COVER_UNAVAILABLE', 'The selected cover is unavailable.');
+  const bodyImages = await findOwnedPostImages(session.visitor.id, input.bodyImageAssetIds);
+  if (bodyImages.length !== input.bodyImageAssetIds.length)
+    apiError(400, 'POST_IMAGE_UNAVAILABLE', 'One or more inserted images are unavailable.');
+  if (
+    [...input.contentHtml.matchAll(/<img\b[^>]*\bsrc=["']\/api\/uploads\/([0-9a-f-]{36})["'][^>]*>/gi)].some(match => {
+      const assetId = match[1];
+      return !assetId || !input.bodyImageAssetIds.includes(assetId);
+    })
+  ) {
+    apiError(400, 'POST_IMAGE_UNAVAILABLE', 'One or more inserted images are unavailable.');
+  }
+
   checkPublishRateLimit(session.visitor.id);
   await touchVisitorSession(session.id, session.visitor.id);
 
   try {
-    const post = await createPublishedPost({ ...input, visitorId: session.visitor.id, topicId: topic.id });
+    const post = await createPublishedPost({
+      ...input,
+      visitorId: session.visitor.id,
+      topicId: topic.id,
+      cover,
+      bodyImages: input.bodyImageAssetIds.map(id => bodyImages.find(image => image.id === id)!)
+    });
     return apiSuccess(post, { created: true });
   } catch (error) {
     // 数据库唯一索引兜底处理并发的双击/网络重试。

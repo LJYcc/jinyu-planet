@@ -2,3 +2,31 @@
 @import './tokens.css';
 @import './base.css';
 @import './components.css';
+
+/* 全站统一滚动条：与 AI Chat 内容区保持一致。 */
+html,
+* {
+  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(224, 181, 73, 0.42);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(224, 181, 73, 0.7);
+  background-clip: padding-box;
+}

@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { IDomEditor, IEditorConfig, IToolbarConfig } from '@wangeditor-next/editor';
 import '@wangeditor-next/editor/dist/css/style.css';
+import { uploadPostBodyImage } from '~/services/file-upload-api';
 
 const props = defineProps<{ modelValue: string; placeholder?: string }>();
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
+const emit = defineEmits<{ 'update:modelValue': [value: string]; 'image-uploaded': [assetId: string] }>();
 const editorRef = shallowRef<IDomEditor>();
+let viewportBeforeEdit: { left: number; top: number } | null = null;
+let restoreScrollFrame: number | undefined;
 
 const WangEditor = defineAsyncComponent(async () => (await import('@wangeditor-next/editor-for-vue')).Editor);
 const WangToolbar = defineAsyncComponent(async () => (await import('@wangeditor-next/editor-for-vue')).Toolbar);
@@ -12,28 +15,81 @@ const WangToolbar = defineAsyncComponent(async () => (await import('@wangeditor-
 const editorConfig = computed<Partial<IEditorConfig>>(() => ({
   placeholder: props.placeholder || '写下此刻想被陌生人读到的一点真心...',
   MENU_CONF: {
-    uploadImage: { server: '' }
+    uploadImage: {
+      allowedFileTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      maxFileSize: 20 * 1024 * 1024,
+      customUpload: async (file: File, insertFn: (url: string, alt: string, href: string) => void) => {
+        try {
+          const image = await uploadPostBodyImage(file);
+          emit('image-uploaded', image.id);
+          insertFn(`/api/uploads/${image.id}`, image.originalName, '');
+        } catch {
+          ElMessage.error('图片上传失败，请稍后重试。');
+        }
+      }
+    },
+    insertVideo: {
+      checkVideo: (source: string) => {
+        try {
+          const url = new URL(source);
+          return url.protocol === 'http:' || url.protocol === 'https:' ? true : '请使用 HTTP 或 HTTPS 视频地址。';
+        } catch {
+          return '请输入有效的视频地址。';
+        }
+      }
+    }
   }
 }));
 const toolbarConfig: Partial<IToolbarConfig> = {
   toolbarKeys: [
     'headerSelect',
+    'blockquote',
+    '|',
     'bold',
+    'underline',
     'italic',
     'through',
     '|',
-    'blockquote',
-    'divider',
+    'wavyUnderline',
+    'emphasisDot',
+    'code',
+    'sup',
+    'sub',
+    'clearStyle',
+    '|',
+    'color',
+    'bgColor',
+    '|',
+    'fontSize',
+    'fontFamily',
+    'lineHeight',
     '|',
     'bulletedList',
     'numberedList',
     'todo',
     '|',
-    'codeBlock',
+    'justifyLeft',
+    'justifyCenter',
+    'justifyRight',
+    'justifyJustify',
+    '|',
+    'indent',
+    'delIndent',
+    '|',
+    'emotion',
     'insertLink',
+    'insertImage',
+    'uploadImage',
+    'insertVideo',
+    'insertTable',
+    'codeBlock',
+    'codeSelectLang',
+    'divider',
     '|',
     'undo',
-    'redo'
+    'redo',
+    'formatPainter',
+    'fullScreen'
   ]
 };
 
@@ -45,15 +101,31 @@ function handleDestroyed() {
   editorRef.value = undefined;
 }
 
-function updateValue(value: string) {
-  emit('update:modelValue', value);
+function rememberPageScroll() {
+  viewportBeforeEdit = { left: window.scrollX, top: window.scrollY };
 }
 
-onBeforeUnmount(() => editorRef.value?.destroy());
+function updateValue(value: string) {
+  const viewport = viewportBeforeEdit ?? { left: window.scrollX, top: window.scrollY };
+  viewportBeforeEdit = null;
+  emit('update:modelValue', value);
+  nextTick(() => {
+    if (restoreScrollFrame) cancelAnimationFrame(restoreScrollFrame);
+    restoreScrollFrame = requestAnimationFrame(() => window.scrollTo(viewport));
+  });
+}
+
+onBeforeUnmount(() => {
+  editorRef.value?.destroy();
+  if (restoreScrollFrame) cancelAnimationFrame(restoreScrollFrame);
+});
 </script>
 
 <template>
-  <div class="post-editor">
+  <div
+    class="post-editor"
+    @beforeinput.capture="rememberPageScroll"
+  >
     <client-only>
       <wang-toolbar
         class="post-editor__toolbar"
@@ -81,6 +153,7 @@ onBeforeUnmount(() => editorRef.value?.destroy());
   width: 100%;
   min-width: 0;
   overflow: hidden;
+  overflow-anchor: none;
   border: 1px solid var(--line);
   background: #fff;
 }
@@ -99,10 +172,12 @@ onBeforeUnmount(() => editorRef.value?.destroy());
 }
 
 .post-editor :deep(.w-e-text-container) {
-  min-height: 390px;
-  font-family: 'Noto Sans SC', sans-serif;
-  font-size: 15px;
-  line-height: 1.9;
+  height: 390px;
+  min-height: 0;
+}
+
+.post-editor :deep(.w-e-scroll) {
+  overflow-y: auto;
 }
 
 .post-editor :deep([data-slate-editor]) {
@@ -111,11 +186,14 @@ onBeforeUnmount(() => editorRef.value?.destroy());
 }
 
 .post-editor :deep(.w-e-text-placeholder) {
+  top: 10px;
+  color: #a4aaa9;
   font-style: normal;
+  font-weight: 400;
 }
 
 .post-editor__fallback {
-  min-height: 390px;
+  height: 390px;
   padding: 22px;
   color: var(--muted);
 }

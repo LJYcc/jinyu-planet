@@ -541,8 +541,6 @@ onBeforeUnmount(() => {
 
   :deep(.katex-display) {
     overflow: auto;
-    scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-    scrollbar-width: thin;
   }
 
   :deep(.ai-chat-markdown__mermaid-viewport) {
@@ -617,8 +615,6 @@ onBeforeUnmount(() => {
     color: #eaf2e8;
     font-size: 13px;
     line-height: 1.7;
-    scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-    scrollbar-width: thin;
   }
 
   :deep(.ai-chat-markdown__code-block code) {
@@ -653,8 +649,6 @@ onBeforeUnmount(() => {
     overflow-x: auto;
     border: 1px solid rgba(218, 235, 225, 0.2);
     border-radius: 8px;
-    scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-    scrollbar-width: thin;
   }
 
   :deep(.ai-chat-markdown__table) {

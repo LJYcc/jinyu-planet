@@ -74,6 +74,13 @@ const topics = [
     colorKey: 'gold',
     sortOrder: 50,
   },
+  {
+    slug: 'mountains-and-sunrise',
+    name: '山与日出',
+    description: '分享你与山、与日出日落的故事。那些让你重新充满力量的瞬间。',
+    colorKey: 'sunrise',
+    sortOrder: 60,
+  },
 ]
 
 async function main() {
