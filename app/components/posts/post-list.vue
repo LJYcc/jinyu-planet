@@ -59,8 +59,10 @@ function postCover(post: PostListItem, index: number) {
 
 <style scoped lang="scss">
 .post-list {
-  display: grid;
-  gap: 0;
+  display: flex;
+  min-height: 390px;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .post-card {
@@ -68,7 +70,7 @@ function postCover(post: PostListItem, index: number) {
   grid-template-columns: 132px minmax(0, 1fr) minmax(195px, auto);
   min-height: 78px;
   gap: 18px;
-  padding: 9px 0;
+  padding: 12px 0;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   color: var(--ink);

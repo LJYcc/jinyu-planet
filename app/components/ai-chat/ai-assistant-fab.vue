@@ -38,7 +38,7 @@ const shouldShow = computed(() => route.path !== '/ai-chat');
 .ai-assistant-fab {
   position: fixed;
   z-index: 30;
-  right: 24px;
+  left: calc(100vw - 24px - 118px);
   bottom: max(24px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -98,7 +98,7 @@ const shouldShow = computed(() => route.path !== '/ai-chat');
 
 @media (max-width: 820px) {
   .ai-assistant-fab {
-    right: 16px;
+    left: calc(100vw - 16px - 96px);
     bottom: max(16px, env(safe-area-inset-bottom));
     width: 96px;
     min-height: 112px;

@@ -380,28 +380,6 @@ defineExpose({ scrollToBottom });
   min-height: 0;
   overflow-y: auto;
   padding: 20px clamp(12px, 1.5vw, 20px);
-  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-  scrollbar-width: thin;
-}
-
-.ai-chat-content__messages::-webkit-scrollbar {
-  width: 6px;
-}
-
-.ai-chat-content__messages::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.ai-chat-content__messages::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: rgba(224, 181, 73, 0.42);
-  background-clip: padding-box;
-}
-
-.ai-chat-content__messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(224, 181, 73, 0.7);
-  background-clip: padding-box;
 }
 
 .ai-chat-content__message-list {

@@ -2,11 +2,19 @@
 import { Search } from '@element-plus/icons-vue';
 import logoDark from '~/assets/logo/goldfish-planet-logo-tech.png';
 import logoLight from '~/assets/logo/goldfish-planet-logo-light-tech.png';
+import PostList from '~/components/posts/post-list.vue';
+import { listPosts } from '~/services/post-api';
+import type { PostListItem } from '~/types/post';
 
 const route = useRoute();
 const isScrolled = ref(false);
 const searchKeyword = ref('');
 const isSearchOpen = ref(false);
+const searchPosts = ref<PostListItem[]>([]);
+const isSearchLoading = ref(false);
+const searchError = ref('');
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let searchRequestId = 0;
 const darkHeroRoutes = ['/', '/posts', '/write', '/about', '/ai-chat'];
 const isHeaderOnDarkHero = computed(() => darkHeroRoutes.includes(route.path) || route.path.startsWith('/posts/'));
 const isAiChatRoute = computed(() => route.path === '/ai-chat');
@@ -30,22 +38,59 @@ function selectMenu(path: string) {
 }
 
 function openSearch() {
-  searchKeyword.value = typeof route.query.q === 'string' ? route.query.q : '';
   isSearchOpen.value = true;
 }
 
-function submitSearch() {
-  const q = searchKeyword.value.trim();
-  isSearchOpen.value = false;
-  void navigateTo({ path: '/posts', query: q ? { q } : {} });
+function resetSearch() {
+  searchRequestId += 1;
+  if (searchTimer) clearTimeout(searchTimer);
+  searchKeyword.value = '';
+  searchPosts.value = [];
+  searchError.value = '';
+  isSearchLoading.value = false;
 }
+
+async function loadSearchResults(keyword: string) {
+  const requestId = ++searchRequestId;
+  const q = keyword.trim();
+  if (!q) {
+    searchPosts.value = [];
+    searchError.value = '';
+    isSearchLoading.value = false;
+    return;
+  }
+
+  isSearchLoading.value = true;
+  searchError.value = '';
+  try {
+    const page = await listPosts({ q, page: 1, pageSize: 100, sort: 'latest' });
+    if (requestId === searchRequestId) searchPosts.value = page.items;
+  } catch {
+    if (requestId === searchRequestId) searchError.value = '搜索暂时不可用，请稍后重试。';
+  } finally {
+    if (requestId === searchRequestId) isSearchLoading.value = false;
+  }
+}
+
+watch(searchKeyword, keyword => {
+  if (!isSearchOpen.value) return;
+  if (searchTimer) clearTimeout(searchTimer);
+  if (!keyword.trim()) {
+    void loadSearchResults('');
+    return;
+  }
+  searchTimer = setTimeout(() => void loadSearchResults(keyword), 300);
+});
 
 onMounted(() => {
   updateScrollState();
   window.addEventListener('scroll', updateScrollState, { passive: true });
 });
 
-onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updateScrollState);
+  if (searchTimer) clearTimeout(searchTimer);
+});
 </script>
 
 <template>
@@ -99,65 +144,71 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
           >
         </el-menu>
 
-        <el-popover
-          v-model:visible="isSearchOpen"
-          placement="bottom-end"
-          trigger="click"
-          :width="310"
-          popper-class="site-search-popover"
-        >
-          <form
-            class="site-search-form"
-            role="search"
-            @submit.prevent="submitSearch"
-          >
-            <el-input
-              v-model="searchKeyword"
-              :prefix-icon="Search"
-              placeholder="搜索公开信号"
-              clearable
-              aria-label="搜索公开信号"
-            />
-            <el-button
-              type="primary"
-              native-type="submit"
-              >搜索</el-button
-            >
-          </form>
-          <template #reference>
-            <el-button
-              class="header-search"
-              :icon="Search"
-              circle
-              text
-              aria-label="搜索公开信号"
-              @click="openSearch"
-            />
-          </template>
-        </el-popover>
-
-        <nuxt-link
-          v-slot="{ navigate }"
-          to="/write"
-          custom
-        >
-          <el-button
-            type="primary"
-            size="small"
-            class="header-cta arrow-hover"
-            @click="navigate"
-          >
-            投递新信号
-            <span
-              class="ml-2"
-              aria-hidden="true"
-              >↗</span
-            >
-          </el-button>
-        </nuxt-link>
+        <el-button
+          class="header-search"
+          :icon="Search"
+          circle
+          text
+          aria-label="搜索公开信号"
+          @click="openSearch"
+        />
       </div>
     </div>
   </header>
+
+  <el-dialog
+    v-model="isSearchOpen"
+    title="搜索公开信号"
+    class="site-search-dialog"
+    width="min(960px, calc(100% - 32px))"
+    align-center
+    @closed="resetSearch"
+  >
+    <div class="site-search-dialog__content">
+      <el-input
+        v-model="searchKeyword"
+        class="site-search-dialog__input"
+        :prefix-icon="Search"
+        placeholder="搜索标题、摘要或正文"
+        clearable
+        aria-label="搜索公开信号"
+      />
+      <div class="site-search-dialog__results">
+        <div class="site-search-dialog__results-content">
+          <div
+            v-if="isSearchLoading"
+            class="site-search-dialog__state"
+            role="status"
+          >
+            <el-skeleton
+              :rows="6"
+              animated
+            />
+          </div>
+          <el-alert
+            v-else-if="searchError"
+            :title="searchError"
+            type="error"
+            show-icon
+            :closable="false"
+          />
+          <el-empty
+            v-else-if="!searchKeyword.trim()"
+            description="输入关键词，搜索公开信号"
+          />
+          <el-empty
+            v-else-if="!searchPosts.length"
+            description="没有找到匹配的公开信号。"
+          />
+          <post-list
+            v-else
+            :posts="searchPosts"
+            @click="isSearchOpen = false"
+          />
+        </div>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <style scoped lang="scss">
@@ -165,8 +216,8 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
   position: fixed;
   z-index: 20;
   top: 0;
-  right: 0;
   left: 0;
+  width: 100vw;
   color: #f8fbf8;
   background-color: transparent;
   border-bottom: 1px solid rgba(236, 244, 238, 0.14);
@@ -243,22 +294,95 @@ onBeforeUnmount(() => window.removeEventListener('scroll', updateScrollState));
   font-size: 18px;
 }
 
-:global(.site-search-popover) {
-  border: 1px solid rgba(23, 27, 27, 0.1);
-  border-radius: 0;
-  background: #fbfcf8;
-  box-shadow: 0 18px 46px rgba(16, 27, 29, 0.16);
+.site-header:not(.site-header--scrolled) .header-search:hover,
+.site-header:not(.site-header--scrolled) .header-search:focus-visible {
+  --el-button-hover-bg-color: #f8fbf8;
+  --el-button-hover-text-color: var(--night);
+  color: var(--night);
 }
 
-:global(.site-search-form) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+:global(.site-search-dialog.el-dialog) {
+  display: flex;
+  height: min(760px, calc(100vh - 64px));
+  margin: auto;
+  flex-direction: column;
 }
 
-@media (max-width: 820px) {
-  .header-cta {
-    display: none;
+:global(.site-search-dialog .el-dialog__body) {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.site-search-dialog__content {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
+}
+
+.site-search-dialog__input {
+  width: auto;
+  margin: 0 24px 18px;
+}
+
+.site-search-dialog__results {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.site-search-dialog__results-content {
+  min-height: 100%;
+  padding: 0 24px 24px;
+}
+
+.site-search-dialog__results::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.site-search-dialog__results:hover {
+  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
+}
+
+.site-search-dialog__results::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.site-search-dialog__results:hover::-webkit-scrollbar-thumb {
+  background: rgba(224, 181, 73, 0.42);
+  background-clip: padding-box;
+}
+
+.site-search-dialog__results:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(224, 181, 73, 0.7);
+}
+
+.site-search-dialog__state {
+  padding: 18px 0;
+}
+
+@media (max-width: 640px) {
+  :global(.site-search-dialog.el-dialog) {
+    height: calc(100vh - 32px);
+  }
+
+  :global(.site-search-dialog .el-dialog__body) {
+    padding: 0;
+  }
+
+  .site-search-dialog__input {
+    margin: 0 16px 18px;
+  }
+
+  .site-search-dialog__results-content {
+    padding: 0 16px 16px;
   }
 
   .site-header__inner {

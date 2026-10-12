@@ -34,6 +34,8 @@ export type PostCreation = {
   clientNonce: string;
   readingMinutes: number;
   slug: string;
+  cover: { storageKey: string; mimeType: string } | null;
+  bodyImages: Array<{ id: string; storageKey: string }>;
 };
 
 /** 根据标签名称生成稳定且不依赖中文转写规则的标签 slug。 */
@@ -207,27 +209,81 @@ export async function findPostByVisitorAndNonce(visitorId: string, clientNonce: 
 
 /** 创建已发布帖子及其标签关联，并返回公开详情 slug。 */
 export async function createPublishedPost(input: PostCreation) {
-  return prisma.post.create({
-    data: {
-      visitorId: input.visitorId,
-      topicId: input.topicId,
-      type: input.type,
-      status: 'published',
-      title: input.title,
-      contentHtml: input.contentHtml,
-      contentText: input.contentText,
-      excerpt: input.excerpt,
-      externalUrl: input.externalUrl,
-      clientNonce: input.clientNonce,
-      readingMinutes: input.readingMinutes,
-      slug: input.slug,
-      tagLinks: {
-        create: input.tags.map(name => ({
-          tag: { connectOrCreate: { where: { name }, create: { name, slug: createTagSlug(name) } } }
-        }))
-      }
-    },
-    select: { slug: true }
+  return prisma.$transaction(async transaction => {
+    const post = await transaction.post.create({
+      data: {
+        visitorId: input.visitorId,
+        topicId: input.topicId,
+        type: input.type,
+        status: 'published',
+        title: input.title,
+        contentHtml: input.contentHtml,
+        contentText: input.contentText,
+        excerpt: input.excerpt,
+        externalUrl: input.externalUrl,
+        clientNonce: input.clientNonce,
+        readingMinutes: input.readingMinutes,
+        slug: input.slug,
+        tagLinks: {
+          create: input.tags.map(name => ({
+            tag: { connectOrCreate: { where: { name }, create: { name, slug: createTagSlug(name) } } }
+          }))
+        }
+      },
+      select: { id: true, slug: true }
+    });
+
+    if (input.cover) {
+      const cover = await transaction.postImage.create({
+        data: {
+          postId: post.id,
+          storageKey: input.cover.storageKey,
+          publicUrl: `/api/posts/${post.slug}/cover`,
+          altText: input.title ?? '帖子封面'
+        },
+        select: { id: true }
+      });
+      await transaction.post.update({ where: { id: post.id }, data: { coverImageId: cover.id } });
+    }
+
+    await Promise.all(
+      input.bodyImages.map((image, index) =>
+        transaction.postImage.create({
+          data: {
+            id: image.id,
+            postId: post.id,
+            storageKey: image.storageKey,
+            publicUrl: `/api/posts/${post.slug}/images/${image.id}`,
+            altText: input.title ?? '帖子图片',
+            sortOrder: index + 1
+          }
+        })
+      )
+    );
+
+    if (input.bodyImages.length) {
+      const publicContentHtml = input.bodyImages.reduce(
+        (html, image) => html.replaceAll(`/api/uploads/${image.id}`, `/api/posts/${post.slug}/images/${image.id}`),
+        input.contentHtml
+      );
+      await transaction.post.update({ where: { id: post.id }, data: { contentHtml: publicContentHtml } });
+    }
+
+    return { slug: post.slug };
+  });
+}
+
+export async function findPublishedPostCover(slug: string) {
+  return prisma.post.findFirst({
+    where: { slug, status: PUBLIC_STATUS },
+    select: { coverImage: { select: { storageKey: true, publicUrl: true } } }
+  });
+}
+
+export async function findPublishedPostImage(slug: string, imageId: string) {
+  return prisma.postImage.findFirst({
+    where: { id: imageId, post: { slug, status: PUBLIC_STATUS } },
+    select: { storageKey: true }
   });
 }
 

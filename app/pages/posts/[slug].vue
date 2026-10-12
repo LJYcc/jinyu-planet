@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { ArrowLeft, Calendar, Clock, CopyDocument, User } from '@element-plus/icons-vue';
+import { ArrowLeft, Clock, CopyDocument } from '@element-plus/icons-vue';
 import detailBandBg from '~/assets/images/bg-posts-lakeside-signal-hero.png';
-import detailCtaBg from '~/assets/images/bg-night-mountain-stars.png';
-import deskCover from '~/assets/images/post-cover-writing-desk-dawn.png';
-import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
 import ArticleContent from '~/components/posts/article-content.vue';
 import { getPostDetail } from '~/services/post-api';
-import type { PostDetail, PostListItem } from '~/types/post';
-import { postDisplayExcerpt, postDisplayTitle } from '~/utils/postDisplay';
+import type { PostDetail } from '~/types/post';
+import { postDisplayTitle } from '~/utils/postDisplay';
 
 const route = useRoute();
+const router = useRouter();
 const post = ref<PostDetail | null>(null);
 const isLoading = ref(true);
 const loadError = ref('');
 const isNotFound = ref(false);
-
-const relatedPosts = computed(() => post.value?.recommendations.slice(0, 3) ?? []);
 
 useSeoMeta({
   title: () => (post.value ? `${postDisplayTitle(post.value)} | 金鱼星球` : '信号阅读 | 金鱼星球'),
@@ -31,8 +27,13 @@ function formatDate(value: string) {
   ].join('.');
 }
 
-function postCover(value: PostListItem, index: number) {
-  return value.coverImage?.url ?? (index % 2 === 0 ? lakeCover : deskCover);
+function returnToPosts() {
+  const previousPath = router.options.history.state.back;
+  if (typeof previousPath === 'string' && /^\/posts(?:\?|$)/.test(previousPath)) {
+    router.back();
+    return;
+  }
+  void router.push('/posts');
 }
 
 async function loadPost() {
@@ -82,6 +83,7 @@ watch(
         <nuxt-link
           class="post-detail-band__back inline-flex items-center gap-2"
           to="/posts"
+          @click.prevent="returnToPosts"
         >
           <el-icon><arrow-left /></el-icon>
           <span>返回星球广场</span>
@@ -152,7 +154,6 @@ watch(
               {{ post.topic.name }}
             </div>
             <h1>{{ postDisplayTitle(post) }}</h1>
-            <p v-if="postDisplayExcerpt(post)">{{ postDisplayExcerpt(post) }}</p>
             <div class="post-detail__meta flex flex-wrap items-center gap-[10px] max-[600px]:gap-2">
               <span class="post-detail__author">
                 <span
@@ -190,35 +191,7 @@ watch(
             </div>
           </header>
 
-          <figure
-            v-if="post.coverImage"
-            class="post-detail__cover"
-          >
-            <img
-              :src="post.coverImage.url"
-              :alt="post.coverImage.altText"
-            />
-            <figcaption v-if="post.coverImage.caption">{{ post.coverImage.caption }}</figcaption>
-          </figure>
-
           <article-content :html="post.contentHtml" />
-
-          <div
-            v-if="post.images.length"
-            class="post-detail__images"
-          >
-            <figure
-              v-for="image in post.images"
-              :key="image.url"
-            >
-              <img
-                :src="image.url"
-                :alt="image.altText"
-                loading="lazy"
-              />
-              <figcaption v-if="image.caption">{{ image.caption }}</figcaption>
-            </figure>
-          </div>
 
           <a
             v-if="post.externalUrl"
@@ -231,6 +204,8 @@ watch(
           </a>
         </article>
 
+        <!-- 详情页仅展示当前帖子的内容，不再渲染右侧信息、CTA 和相关推荐。 -->
+        <!--
         <aside class="post-detail__side">
           <section class="detail-side-block">
             <h2 class="detail-side-title">信号信息</h2>
@@ -334,6 +309,7 @@ watch(
             </nuxt-link>
           </section>
         </aside>
+        -->
       </div>
     </div>
   </div>
@@ -345,7 +321,7 @@ watch(
 }
 
 .post-detail-band {
-  min-height: 158px;
+  min-height: 126px;
   padding-top: 78px;
   color: #f7faf7;
   background-color: var(--night);
@@ -355,9 +331,9 @@ watch(
 
 .post-detail-band__inner {
   display: flex;
-  min-height: 80px;
+  min-height: 48px;
   align-items: center;
-  padding-bottom: 18px;
+  padding-bottom: 8px;
 }
 
 .post-detail-band__back {
@@ -376,8 +352,9 @@ watch(
 }
 
 .post-detail-content {
-  padding-top: 36px;
-  padding-bottom: 112px;
+  height: calc(100vh - 126px);
+  padding-top: 28px;
+  padding-bottom: 28px;
 }
 
 .post-detail__state :deep(.el-skeleton) {
@@ -385,10 +362,30 @@ watch(
 }
 
 .post-detail-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 54px;
-  align-items: start;
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  max-width: 960px;
+  margin: 0 auto;
+  scrollbar-color: transparent transparent;
+}
+
+.post-detail-layout:hover {
+  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
+}
+
+.post-detail-layout::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.post-detail-layout:hover::-webkit-scrollbar-thumb {
+  background: rgba(224, 181, 73, 0.42);
+  background-clip: padding-box;
+}
+
+.post-detail-layout:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(224, 181, 73, 0.7);
+  background-clip: padding-box;
 }
 
 .post-detail__article {
@@ -396,7 +393,7 @@ watch(
 }
 
 .post-detail__header {
-  padding-bottom: 30px;
+  padding-bottom: 18px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -418,24 +415,16 @@ watch(
 
 .post-detail__header h1 {
   max-width: 800px;
-  margin: 17px 0 14px;
+  margin: 10px 0 0;
   color: var(--ink);
-  font-size: clamp(34px, 4.5vw, 54px);
+  font-size: clamp(32px, 3vw, 42px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
-.post-detail__header > p {
-  max-width: 790px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.85;
-}
-
 .post-detail__meta {
-  margin-top: 22px;
+  margin-top: 10px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -467,11 +456,6 @@ watch(
   margin-left: auto;
 }
 
-.post-detail__cover {
-  margin: 34px 0 36px;
-}
-
-.post-detail__cover img,
 .post-detail__images img {
   display: block;
   width: 100%;
@@ -479,11 +463,6 @@ watch(
   object-fit: cover;
 }
 
-.post-detail__cover img {
-  aspect-ratio: 16 / 9;
-}
-
-.post-detail__cover figcaption,
 .post-detail__images figcaption {
   margin-top: 9px;
   color: var(--muted);
@@ -512,214 +491,15 @@ watch(
   color: var(--ink);
 }
 
-.post-detail__side {
-  position: sticky;
-  top: 104px;
-  min-width: 0;
-  padding-left: 30px;
-  border-left: 1px solid var(--line);
-}
-
-.detail-side-block {
-  padding-bottom: 28px;
-  border-bottom: 1px solid var(--line);
-}
-
-.detail-side-block + .detail-side-block {
-  padding-top: 26px;
-}
-
-.detail-side-title {
-  position: relative;
-  margin: 0 0 20px;
-  padding-left: 14px;
-  color: var(--ink);
-  font-size: 19px;
-  font-weight: 700;
-}
-
-.detail-side-title::before {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 0;
-  width: 4px;
-  background: var(--accent);
-  content: '';
-}
-
-.detail-side-meta {
-  display: grid;
-  gap: 15px;
-  margin: 0;
-}
-
-.detail-side-meta div {
-  display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  font-size: 13px;
-}
-
-.detail-side-meta dt {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-}
-
-.detail-side-meta dt :deep(.el-icon) {
-  color: #798780;
-  font-size: 16px;
-}
-
-.detail-side-meta dd {
-  margin: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-side-tags :deep(.el-tag) {
-  border-color: #e1e6df;
-  color: var(--muted);
-  background: #f4f6f1;
-}
-
-.detail-side-cta {
-  margin: 28px 0;
-  padding: 22px;
-  color: #f3f8f2;
-  background-position: center;
-  background-size: cover;
-}
-
-.detail-side-cta__mark {
-  display: inline-grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  margin-bottom: 14px;
-  color: var(--night);
-  background: var(--accent);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.detail-side-cta h2 {
-  margin: 0 0 8px;
-  font-size: 19px;
-  font-weight: 700;
-}
-
-.detail-side-cta p {
-  margin: 0 0 18px;
-  color: #c8d5cd;
-  font-size: 13px;
-  line-height: 1.75;
-}
-
-.detail-related {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.detail-related__heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.detail-related__more {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.detail-related__more:hover {
-  color: var(--accent-deep);
-}
-
-.detail-related__item {
-  display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 11px 0;
-  color: var(--ink);
-}
-
-.detail-related__item:hover {
-  color: var(--accent-deep);
-}
-
-.detail-related__image {
-  display: block;
-  width: 82px;
-  aspect-ratio: 1.3;
-  overflow: hidden;
-}
-
-.detail-related__image img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.detail-related__item:hover .detail-related__image img {
-  transform: scale(1.05);
-}
-
-.detail-related__item strong,
-.detail-related__item small {
-  display: block;
-}
-
-.detail-related__item strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 13px;
-  line-height: 1.55;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.detail-related__item small {
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-@media (max-width: 900px) {
-  .post-detail-layout {
-    grid-template-columns: 1fr;
-    gap: 48px;
-  }
-
-  .post-detail__side {
-    position: static;
-    padding-top: 32px;
-    padding-left: 0;
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
-}
-
 @media (max-width: 600px) {
   .post-detail-band {
-    min-height: 136px;
+    min-height: 118px;
     padding-top: 68px;
   }
 
   .post-detail-band__inner {
-    min-height: 68px;
-    padding-bottom: 12px;
+    min-height: 50px;
+    padding-bottom: 8px;
   }
 
   .post-detail-band__back {
@@ -727,26 +507,18 @@ watch(
   }
 
   .post-detail-content {
-    padding-top: 26px;
-    padding-bottom: 78px;
+    height: calc(100vh - 118px);
+    padding-top: 22px;
+    padding-bottom: 22px;
   }
 
   .post-detail__header h1 {
-    font-size: 32px;
+    font-size: 30px;
   }
 
   .post-detail__copy {
+    flex-basis: 100%;
     margin-left: 0;
-  }
-
-  .post-detail__cover {
-    margin-top: 26px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-related__image img {
-    transition: none;
   }
 }
 </style>
