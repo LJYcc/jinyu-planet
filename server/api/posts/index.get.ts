@@ -8,9 +8,9 @@ export default defineApiHandler(async event => {
   // repository 组装 Prisma 条件。
   const query = getQuery(event);
   const page = normalizePositiveInteger(query.page, 1);
-  const pageSize = normalizePositiveInteger(query.pageSize, 12, 50);
+  const pageSize = normalizePositiveInteger(query.pageSize, 12, 100);
   if (!page || !pageSize) {
-    apiError(400, 'INVALID_PAGINATION', 'page must be >= 1 and pageSize must be between 1 and 50.');
+    apiError(400, 'INVALID_PAGINATION', 'page must be >= 1 and pageSize must be between 1 and 100.');
   }
 
   const topic = typeof query.topic === 'string' ? query.topic.trim() : undefined;

@@ -1,123 +1,66 @@
 <script setup lang="ts">
-import { DocumentChecked, RefreshRight, View } from '@element-plus/icons-vue';
+import type { UploadFile } from 'element-plus';
+import { ElMessageBox } from 'element-plus';
 import { v4 as uuidv4 } from 'uuid';
 import { onBeforeRouteLeave } from 'vue-router';
 import writeHeroBg from '~/assets/images/bg-write-desk-dawn-hero.png';
 import writeBottomBg from '~/assets/images/bg-night-mountain-stars.png';
 import ArticleContent from '~/components/posts/article-content.vue';
-import PostEditor from '~/components/posts/post-editor.vue';
+import WriteContentEditor from '~/components/posts/write-content-editor.vue';
+import WriteSignalSettings from '~/components/posts/write-signal-settings.vue';
+import { uploadPostCover } from '~/services/file-upload-api';
 import { createPost } from '~/services/post-api';
 import { listTopics } from '~/services/topic-api';
 import type { PublicTopic } from '~/types/post';
 
-type PostType = 'article' | 'short' | 'photo' | 'link';
 type Draft = {
-  type: PostType;
   topic: string;
   title: string;
   contentHtml: string;
-  externalUrl: string;
   tags: string[];
+  coverAssetId: string | null;
+  coverName: string;
+  bodyImageAssetIds: string[];
   clientNonce: string;
 };
 
 const DRAFT_STORAGE_KEY = 'goldfish-planet-write-draft-v1';
-const POST_TYPES: Array<{ value: PostType; label: string }> = [
-  { value: 'article', label: '长文' },
-  { value: 'short', label: '短帖' },
-  { value: 'photo', label: '图文' },
-  { value: 'link', label: '链接分享' }
-];
-const POST_TYPE_RULES: Record<
-  PostType,
-  {
-    note: string;
-    titleLabel: string;
-    titlePlaceholder: string;
-    contentLabel: string;
-    contentPlaceholder: string;
-    titleMode: 'required' | 'optional' | 'hidden';
-    isContentRequired: boolean;
-    maxTextLength: number;
-  }
-> = {
-  article: {
-    note: '适合完整观点、经验复盘或较长的故事。标题必填，摘要会自动从正文生成。',
-    titleLabel: '文章标题',
-    titlePlaceholder: '用一句话说明这篇长文想讲什么',
-    contentLabel: '正文',
-    contentPlaceholder: '写下完整的想法、故事或经验...',
-    titleMode: 'required',
-    isContentRequired: true,
-    maxTextLength: 12000
-  },
-  short: {
-    note: '适合一句灵感、状态或小观察。不需要标题，列表会直接用正文开头展示。',
-    titleLabel: '',
-    titlePlaceholder: '',
-    contentLabel: '短帖内容',
-    contentPlaceholder: '直接写下这条短信号，建议 500 字以内...',
-    titleMode: 'hidden',
-    isContentRequired: true,
-    maxTextLength: 500
-  },
-  photo: {
-    note: '适合围绕一张图讲清楚场景、心情或故事。标题可选，图片上传会在存储服务接入后开放。',
-    titleLabel: '图文标题（可选）',
-    titlePlaceholder: '例如：傍晚六点的天桥',
-    contentLabel: '图文说明',
-    contentPlaceholder: '描述这张图里的场景、人物、心情或故事...',
-    titleMode: 'optional',
-    isContentRequired: true,
-    maxTextLength: 4000
-  },
-  link: {
-    note: '适合分享一篇文章、一个工具或一个发现。链接和标题必填，推荐语可选。',
-    titleLabel: '链接标题',
-    titlePlaceholder: '这个链接是什么，为什么值得打开',
-    contentLabel: '推荐语（可选）',
-    contentPlaceholder: '可以补充你为什么推荐它；不写也可以直接发布链接。',
-    titleMode: 'required',
-    isContentRequired: false,
-    maxTextLength: 2000
-  }
-};
 
 useSeoMeta({ title: '投递新信号 | 金鱼星球', description: '写下想被读到的一点真心。' });
 
 const { visitor, bootstrap, changeNickname } = useVisitor();
+const route = useRoute();
 const topics = ref<PublicTopic[]>([]);
 const loadError = ref('');
 const isReady = ref(false);
 const isSubmitting = ref(false);
 const isChangingNickname = ref(false);
 const isDirty = ref(false);
+const isCoverUploading = ref(false);
+const coverPreviewUrl = ref('');
+const coverPreviewVisible = ref(false);
 const previewVisible = ref(false);
 const publishedSlug = ref('');
 const publishError = ref('');
 const form = reactive<Draft>({
-  type: 'article',
   topic: '',
   title: '',
   contentHtml: '',
-  externalUrl: '',
   tags: [],
+  coverAssetId: null,
+  coverName: '',
+  bodyImageAssetIds: [],
   clientNonce: ''
 });
 
-const activeTypeRule = computed(() => POST_TYPE_RULES[form.type]);
-const shouldShowTitle = computed(() => activeTypeRule.value.titleMode !== 'hidden');
-const isTitleRequired = computed(() => activeTypeRule.value.titleMode === 'required');
 const contentLength = computed(() => contentText().length);
 const previewTitle = computed(() => form.title.trim() || contentText());
-const canPublish = computed(() => Boolean(visitor.value && form.topic && form.clientNonce && !isSubmitting.value));
+const canPublish = computed(() =>
+  Boolean(visitor.value && form.topic && form.clientNonce && !isSubmitting.value && !isCoverUploading.value)
+);
 
 function createNonce() {
   return uuidv4();
-}
-
-function isPostType(value: unknown): value is PostType {
-  return typeof value === 'string' && POST_TYPES.some(type => type.value === value);
 }
 
 function restoreDraft() {
@@ -125,15 +68,16 @@ function restoreDraft() {
     const rawDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
     if (!rawDraft) return;
     const draft = JSON.parse(rawDraft) as Partial<Draft>;
-    if (!isPostType(draft.type)) return;
-
-    form.type = draft.type;
     form.topic = typeof draft.topic === 'string' ? draft.topic : '';
     form.title = typeof draft.title === 'string' ? draft.title : '';
     form.contentHtml = typeof draft.contentHtml === 'string' ? draft.contentHtml : '';
-    form.externalUrl = typeof draft.externalUrl === 'string' ? draft.externalUrl : '';
     form.tags = Array.isArray(draft.tags)
       ? draft.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 5)
+      : [];
+    form.coverAssetId = typeof draft.coverAssetId === 'string' ? draft.coverAssetId : null;
+    form.coverName = typeof draft.coverName === 'string' ? draft.coverName : '';
+    form.bodyImageAssetIds = Array.isArray(draft.bodyImageAssetIds)
+      ? draft.bodyImageAssetIds.filter((id): id is string => typeof id === 'string')
       : [];
     form.clientNonce = typeof draft.clientNonce === 'string' ? draft.clientNonce : '';
   } catch {
@@ -159,12 +103,52 @@ function contentText() {
 
 function validateBeforePreview() {
   if (!form.topic) return '请选择一个主题。';
-  if (isTitleRequired.value && !form.title.trim()) return `${activeTypeRule.value.titleLabel}需要填写。`;
-  if (activeTypeRule.value.isContentRequired && !contentText()) return `请先填写${activeTypeRule.value.contentLabel}。`;
-  if (contentLength.value > activeTypeRule.value.maxTextLength)
-    return `${activeTypeRule.value.contentLabel}不能超过 ${activeTypeRule.value.maxTextLength} 字。`;
-  if (form.type === 'link' && !form.externalUrl.trim()) return '链接分享需要填写原始链接。';
+  if (!form.title.trim()) return '请填写标题。';
+  if (!contentText()) return '请先填写正文。';
+  if (contentLength.value > 12000) return '正文不能超过 12000 字。';
+  if (isCoverUploading.value) return '封面仍在上传，请稍候。';
   return '';
+}
+
+async function handleCoverChange(uploadFile: UploadFile) {
+  const file = uploadFile.raw;
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return ElMessage.warning('封面只能上传图片文件。');
+
+  isCoverUploading.value = true;
+  form.coverAssetId = null;
+  form.coverName = '';
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value);
+  coverPreviewUrl.value = URL.createObjectURL(file);
+  try {
+    const cover = await uploadPostCover(file);
+    form.coverAssetId = cover.id;
+    form.coverName = cover.originalName;
+    ElMessage.success('封面已上传。');
+  } catch {
+    if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value);
+    coverPreviewUrl.value = '';
+    ElMessage.error('封面上传失败，请稍后重试。');
+  } finally {
+    isCoverUploading.value = false;
+  }
+}
+
+function removeCover() {
+  form.coverAssetId = null;
+  form.coverName = '';
+  coverPreviewVisible.value = false;
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value);
+  coverPreviewUrl.value = '';
+}
+
+function openCoverPreview(event: MouseEvent) {
+  event.stopPropagation();
+  if (coverPreviewUrl.value) coverPreviewVisible.value = true;
+}
+
+function addBodyImageAsset(assetId: string) {
+  if (!form.bodyImageAssetIds.includes(assetId)) form.bodyImageAssetIds.push(assetId);
 }
 
 function openPreview() {
@@ -178,7 +162,12 @@ async function loadWriteData() {
   try {
     const [topicsData] = await Promise.all([listTopics(), bootstrap()]);
     topics.value = topicsData;
-    if (!form.topic && topics.value[0]) form.topic = topics.value[0].slug;
+    const requestedTopic = typeof route.query.topic === 'string' ? route.query.topic : '';
+    if (requestedTopic && topics.value.some(topic => topic.slug === requestedTopic)) {
+      form.topic = requestedTopic;
+    } else if (!form.topic && topics.value[0]) {
+      form.topic = topics.value[0].slug;
+    }
   } catch {
     loadError.value = '无法连接星球服务，请刷新页面后重试。';
   }
@@ -204,12 +193,12 @@ async function publishPost() {
   publishError.value = '';
   try {
     const result = await createPost({
-      type: form.type,
       topic: form.topic,
-      title: form.type === 'short' ? '' : form.title,
+      title: form.title,
       contentHtml: form.contentHtml,
-      externalUrl: form.type === 'link' ? form.externalUrl : '',
       tags: form.tags,
+      coverAssetId: form.coverAssetId,
+      bodyImageAssetIds: form.bodyImageAssetIds,
       clientNonce: form.clientNonce
     });
     publishedSlug.value = result.slug;
@@ -224,12 +213,29 @@ async function publishPost() {
   }
 }
 
+async function confirmPublish() {
+  const message = validateBeforePreview();
+  if (message) return ElMessage.warning(message);
+
+  try {
+    await ElMessageBox.confirm('投递后内容将公开显示在金鱼星球，确认现在投递吗？', '确认投递', {
+      confirmButtonText: '确认投递',
+      cancelButtonText: '继续编辑',
+      type: 'warning'
+    });
+    await publishPost();
+  } catch {
+    // 用户取消确认时保持当前草稿，不显示额外提示。
+  }
+}
+
 function continueWriting() {
   publishedSlug.value = '';
   form.title = '';
   form.contentHtml = '';
-  form.externalUrl = '';
   form.tags = [];
+  form.bodyImageAssetIds = [];
+  removeCover();
   form.clientNonce = createNonce();
 }
 
@@ -248,6 +254,7 @@ watch(
 );
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', handleBeforeUnload);
   restoreDraft();
   if (!form.clientNonce) form.clientNonce = createNonce();
   isReady.value = true;
@@ -261,8 +268,10 @@ const handleBeforeUnload = (event: BeforeUnloadEvent) => {
   event.preventDefault();
   event.returnValue = '';
 };
-onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload));
-onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload));
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value);
+});
 </script>
 
 <template>
@@ -307,189 +316,35 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         v-else
         class="write-layout grid gap-10 lg:grid-cols-[minmax(0,1fr)_330px]"
       >
-        <main class="write-main">
-          <div class="write-section-title">
-            <h2>分享你的想法</h2>
-          </div>
-          <el-form
-            label-position="top"
-            class="write-form"
-          >
-            <el-form-item label="信号类型">
-              <el-radio-group
-                v-model="form.type"
-                class="write-type-group"
-              >
-                <el-radio-button
-                  v-for="type in POST_TYPES"
-                  :key="type.value"
-                  :value="type.value"
-                  >{{ type.label }}</el-radio-button
-                >
-              </el-radio-group>
-              <p class="write-type-note">{{ activeTypeRule.note }}</p>
-            </el-form-item>
-
-            <el-form-item
-              v-if="shouldShowTitle"
-              :label="activeTypeRule.titleLabel"
-              :required="isTitleRequired"
-            >
-              <el-input
-                v-model="form.title"
-                maxlength="160"
-                show-word-limit
-                :placeholder="activeTypeRule.titlePlaceholder"
-              />
-            </el-form-item>
-            <el-form-item
-              v-if="form.type === 'link'"
-              label="原始链接"
-              required
-            >
-              <el-input
-                v-model="form.externalUrl"
-                maxlength="2048"
-                placeholder="https://example.com"
-                inputmode="url"
-              />
-            </el-form-item>
-            <el-alert
-              v-if="form.type === 'photo'"
-              class="mb-5"
-              title="图片上传服务尚未接入；你可以先完成图文说明，图片功能将在存储服务接入后开放。"
-              type="info"
-              show-icon
-              :closable="false"
-            />
-
-            <el-form-item
-              :label="activeTypeRule.contentLabel"
-              :required="activeTypeRule.isContentRequired"
-            >
-              <post-editor
-                v-model="form.contentHtml"
-                :placeholder="activeTypeRule.contentPlaceholder"
-              />
-              <p class="write-field-hint">
-                {{ contentLength }} / {{ activeTypeRule.maxTextLength }} 字，摘要会由系统自动生成。
-              </p>
-            </el-form-item>
-          </el-form>
-
-          <div class="writing-note grid gap-4 sm:grid-cols-[42px_minmax(0,1fr)]">
-            <span aria-hidden="true">◇</span>
-            <p>不必追求完美，真实的想法就很好。这里是一个温柔的角落，你可以放心地表达。</p>
-          </div>
-
-          <div
-            v-if="publishError"
-            class="mb-5"
-            role="alert"
-          >
-            <el-alert
-              :title="publishError"
-              type="error"
-              show-icon
-              :closable="false"
-            />
-          </div>
-          <div
-            class="write-actions grid gap-4 border-t border-[var(--line)] pt-7 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-          >
-            <el-button
-              :icon="View"
-              size="large"
-              @click="openPreview"
-              >预览</el-button
-            >
-            <el-button
-              type="primary"
-              :icon="DocumentChecked"
-              size="large"
-              :loading="isSubmitting"
-              :disabled="!canPublish"
-              @click="publishPost"
-            >
-              投递到金鱼星球
-            </el-button>
-          </div>
-        </main>
-
-        <aside class="write-aside">
-          <section class="write-side-block">
-            <h2>当前署名</h2>
-            <div class="write-identity">
-              <strong>{{ visitor?.nickname || '正在生成昵称...' }}</strong>
-              <el-button
-                :icon="RefreshRight"
-                text
-                size="small"
-                :loading="isChangingNickname"
-                @click="rotateNickname"
-              >
-                换一个昵称
-              </el-button>
-            </div>
-          </section>
-
-          <section class="write-side-block">
-            <el-form
-              label-position="top"
-              class="write-form"
-            >
-              <el-form-item
-                label="选择主题"
-                required
-              >
-                <el-select
-                  v-model="form.topic"
-                  placeholder="选择一个主题"
-                  class="w-full"
-                >
-                  <el-option
-                    v-for="topic in topics"
-                    :key="topic.slug"
-                    :label="topic.name"
-                    :value="topic.slug"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="添加标签">
-                <el-select
-                  v-model="form.tags"
-                  multiple
-                  filterable
-                  allow-create
-                  default-first-option
-                  placeholder="输入标签后按回车"
-                  class="w-full"
-                >
-                  <el-option
-                    v-for="tag in form.tags"
-                    :key="tag"
-                    :label="tag"
-                    :value="tag"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </section>
-
-          <section class="write-safety">
-            <p>请勿发布个人隐私、违法或攻击性内容。</p>
-          </section>
-
-          <section class="write-saved">
-            <strong>草稿已保存</strong>
-            <span>草稿会自动保存在当前浏览器。</span>
-          </section>
-
-          <blockquote>
-            有些想法现在还没有答案，但它依然值得被好好放下。
-            <span>—— 金鱼星球</span>
-          </blockquote>
-        </aside>
+        <write-signal-settings
+          :nickname="visitor?.nickname"
+          :topics="topics"
+          v-model:title="form.title"
+          v-model:topic="form.topic"
+          v-model:tags="form.tags"
+          :cover-preview-url="coverPreviewUrl"
+          :is-cover-uploading="isCoverUploading"
+          :is-changing-nickname="isChangingNickname"
+          :is-submitting="isSubmitting"
+          :can-publish="canPublish"
+          :publish-error="publishError"
+          @cover-change="handleCoverChange"
+          @preview-cover="openCoverPreview"
+          @remove-cover="removeCover"
+          @rotate-nickname="rotateNickname"
+          @preview="openPreview"
+          @publish="confirmPublish"
+        />
+        <write-content-editor
+          v-model:content-html="form.contentHtml"
+          :content-length="contentLength"
+          :publish-error="publishError"
+          :can-publish="canPublish"
+          :is-submitting="isSubmitting"
+          @image-uploaded="addBodyImageAsset"
+          @preview="openPreview"
+          @publish="confirmPublish"
+        />
       </div>
     </section>
 
@@ -507,29 +362,46 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
     <el-dialog
       v-model="previewVisible"
       title="投递预览"
-      width="min(720px, calc(100% - 32px))"
+      class="write-preview-dialog"
+      width="min(960px, calc(100% - 32px))"
       align-center
     >
       <article class="write-preview">
-        <p class="mb-3 text-sm font-semibold text-[var(--accent-deep)]">
-          {{ topics.find(topic => topic.slug === form.topic)?.name }}
-        </p>
-        <h2 class="m-0 text-[28px] leading-[1.3]">{{ previewTitle }}</h2>
-        <p class="mt-3 mb-7 text-sm text-[var(--muted)]">
-          {{ visitor?.nickname }} · 预计 {{ Math.max(1, Math.ceil(contentText().length / 400)) }} 分钟阅读
-        </p>
-        <a
-          v-if="form.type === 'link' && form.externalUrl"
-          class="write-preview__link"
-          :href="form.externalUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ form.externalUrl }}</a
-        >
-        <article-content
-          v-if="contentText()"
-          :html="form.contentHtml"
-        />
+        <header class="write-preview__header">
+          <div class="write-preview__topic">
+            <span aria-hidden="true">#</span>
+            {{ topics.find(topic => topic.slug === form.topic)?.name }}
+          </div>
+          <h1>{{ previewTitle }}</h1>
+          <div class="write-preview__meta">
+            <span class="write-preview__author">
+              <span
+                class="write-preview__author-avatar"
+                aria-hidden="true"
+                >{{ visitor?.nickname?.slice(0, 1) }}</span
+              >
+              <strong>{{ visitor?.nickname }}</strong>
+            </span>
+            <span
+              class="write-preview__meta-separator"
+              aria-hidden="true"
+              >/</span
+            >
+            <span>刚刚</span>
+            <span
+              class="write-preview__meta-separator"
+              aria-hidden="true"
+              >/</span
+            >
+            <span>预计 {{ Math.max(1, Math.ceil(contentText().length / 400)) }} 分钟阅读</span>
+          </div>
+        </header>
+        <div class="write-preview__body">
+          <article-content
+            v-if="contentText()"
+            :html="form.contentHtml"
+          />
+        </div>
       </article>
       <template #footer>
         <el-button @click="previewVisible = false">继续编辑</el-button>
@@ -541,6 +413,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         >
       </template>
     </el-dialog>
+
+    <el-image-viewer
+      v-if="coverPreviewVisible && coverPreviewUrl"
+      :url-list="[coverPreviewUrl]"
+      @close="coverPreviewVisible = false"
+    />
 
     <el-dialog
       :model-value="Boolean(publishedSlug)"
@@ -603,137 +481,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   background: #fff;
 }
 
-.write-main {
-  min-width: 0;
-  padding-right: 34px;
-  border-right: 1px solid var(--line);
-}
-
-.write-section-title {
-  margin-bottom: 22px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
-}
-
-.write-section-title h2,
-.write-side-block h2 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.write-form :deep(.el-form-item__label) {
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.write-form :deep(.el-form-item) {
-  margin-bottom: 25px;
-}
-
-.write-type-group {
-  display: grid;
-  width: 100%;
-  gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.write-type-group :deep(.el-radio-button__inner) {
-  width: 100%;
-  border-left: var(--el-border);
-  border-radius: 0;
-}
-
-.write-type-note,
-.write-field-hint {
-  width: 100%;
-  margin: 9px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.writing-note {
-  margin: 2px 0 30px;
-  color: var(--muted);
-}
-
-.writing-note span {
-  color: var(--accent-deep);
-  font-size: 30px;
-}
-
-.writing-note p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.9;
-}
-
-.write-actions :deep(.el-button) {
-  margin: 0;
-}
-
-.write-aside {
-  display: grid;
-  align-content: start;
-  gap: 26px;
-}
-
-.write-side-block {
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--line);
-}
-
-.write-identity {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.write-identity strong {
-  color: var(--ink);
-  font-size: 18px;
-}
-
-.write-safety {
-  padding: 18px;
-  border: 1px solid var(--line);
-  background: #f1f3ee;
-}
-
-.write-safety p,
-.write-saved span {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.write-saved {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--line);
-}
-
-.write-saved strong {
-  color: var(--ink);
-}
-
-.write-aside blockquote {
-  margin: 0;
-  color: #87918c;
-  font-size: 15px;
-  line-height: 2;
-}
-
-.write-aside blockquote span {
-  display: block;
-  margin-top: 18px;
-}
-
 .write-bottom-visual {
   min-height: 360px;
   display: flex;
@@ -752,35 +499,152 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 }
 
 .write-preview {
-  max-width: 640px;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
   margin: 0 auto;
 }
 
-.write-preview__link {
+:global(.write-preview-dialog.el-dialog) {
+  display: flex;
+  height: min(760px, calc(100vh - 64px));
+  margin: auto;
+  flex-direction: column;
+}
+
+:global(.write-preview-dialog .el-dialog__body) {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding: 0 24px;
+}
+
+:global(.write-preview-dialog .el-dialog__footer) {
+  flex: 0 0 auto;
+}
+
+.write-preview__header {
+  flex: 0 0 auto;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.write-preview__topic {
   display: inline-flex;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  margin-bottom: 18px;
-  color: var(--accent-deep);
-  font-size: 14px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #9a7b16;
+  background: #fbf0c8;
+  font-size: 12px;
   font-weight: 700;
 }
 
-@media (max-width: 1024px) {
-  .write-main {
-    padding-right: 0;
-    border-right: 0;
-  }
+.write-preview__topic span {
+  color: var(--accent-deep);
+}
 
-  .write-aside {
-    padding-top: 30px;
-    border-top: 1px solid var(--line);
-  }
+.write-preview__header h1 {
+  max-width: 800px;
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: clamp(32px, 3vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.write-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.write-preview__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.write-preview__author-avatar {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #eef5ef;
+  background: var(--night-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.write-preview__meta-separator {
+  color: #b6beb8;
+}
+
+.write-preview__body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.write-preview__body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.write-preview__body:hover {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
+}
+
+.write-preview__body:hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.write-preview__body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.write-preview__body:hover::-webkit-scrollbar-thumb {
+  background: rgba(224, 181, 73, 0.42);
+  background-clip: padding-box;
+}
+
+.write-preview__body:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(224, 181, 73, 0.7);
+}
+
+:global(.el-image-viewer__mask) {
+  opacity: 0.88;
 }
 
 @media (max-width: 640px) {
-  .write-type-group {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  :global(.write-preview-dialog.el-dialog) {
+    height: calc(100vh - 32px);
+  }
+
+  :global(.write-preview-dialog .el-dialog__body) {
+    padding: 0 16px;
+  }
+
+  .write-preview__header h1 {
+    font-size: 30px;
+  }
+
+  .write-preview__meta {
+    gap: 8px;
   }
 
   .write-bottom-visual {

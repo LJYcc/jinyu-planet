@@ -123,8 +123,6 @@ function getDomain(url: string) {
 :global(.ai-search-sources__drawer .el-drawer__body) {
   padding: 0 20px 22px;
   overflow-y: auto;
-  scrollbar-color: rgba(224, 181, 73, 0.58) transparent;
-  scrollbar-width: thin;
 }
 
 .ai-search-sources__list {

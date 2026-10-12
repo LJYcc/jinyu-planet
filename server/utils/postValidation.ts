@@ -8,22 +8,29 @@ import { randomUUID } from 'node:crypto';
 import { ELEMENT_NODE, TEXT_NODE, parse, renderSync, transformSync, walkSync } from 'ultrahtml';
 import sanitize from 'ultrahtml/transformers/sanitize';
 
-const ALLOWED_TYPES = new Set(['article', 'short', 'photo', 'link']);
 const ALLOWED_ELEMENTS = [
   'a',
   'b',
   'blockquote',
   'br',
   'code',
+  'col',
+  'colgroup',
   'del',
+  'div',
   'em',
   'figcaption',
   'figure',
   'h1',
   'h2',
   'h3',
+  'h4',
+  'h5',
+  'h6',
   'hr',
   'i',
+  'img',
+  'input',
   'li',
   'ol',
   'p',
@@ -31,6 +38,8 @@ const ALLOWED_ELEMENTS = [
   's',
   'span',
   'strong',
+  'sub',
+  'sup',
   'table',
   'tbody',
   'td',
@@ -38,29 +47,27 @@ const ALLOWED_ELEMENTS = [
   'thead',
   'tr',
   'u',
-  'ul'
+  'ul',
+  'video',
+  'source'
 ];
 const MAX_HTML_LENGTH = 50_000;
 const MAX_TEXT_LENGTH = 12_000;
-const MAX_TEXT_LENGTH_BY_TYPE = {
-  article: 12_000,
-  short: 500,
-  photo: 4_000,
-  link: 2_000
-} as const;
 const MAX_TAGS = 5;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class PostInputError extends Error {}
 
 export type ValidatedPostInput = {
-  type: 'article' | 'short' | 'photo' | 'link';
+  type: 'article';
   topicSlug: string;
   title: string | null;
   contentHtml: string;
   contentText: string;
   excerpt: string;
   externalUrl: string | null;
+  coverAssetId: string | null;
+  bodyImageAssetIds: string[];
   tags: string[];
   clientNonce: string;
   readingMinutes: number;
@@ -85,6 +92,51 @@ function safeExternalUrl(value: string) {
   } catch {
     return null;
   }
+}
+
+function safeMediaUrl(value: string) {
+  if (/^\/api\/(?:uploads|posts)\//.test(value)) return value;
+  return safeExternalUrl(value);
+}
+
+const STYLE_VALUE_PATTERNS: Record<string, RegExp> = {
+  color: /^(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([\d.%\s,/+-]+\)|[a-z]+)$/i,
+  'background-color': /^(?:#[0-9a-f]{3,8}|(?:rgb|hsl)a?\([\d.%\s,/+-]+\)|[a-z]+)$/i,
+  'font-size': /^\d+(?:\.\d+)?(?:px|em|rem|%)$/i,
+  'font-family': /^[\p{L}\p{N}\s,'"-]{1,160}$/u,
+  'line-height': /^\d+(?:\.\d+)?(?:px|em|rem|%)?$/i,
+  'text-align': /^(?:left|right|center|justify)$/i,
+  'text-indent': /^\d+(?:\.\d+)?(?:px|em|rem|%)$/i,
+  width: /^\d+(?:\.\d+)?(?:px|%)$/i,
+  height: /^\d+(?:\.\d+)?(?:px|%)$/i,
+  'text-decoration-line': /^underline$/i,
+  'text-decoration-style': /^wavy$/i,
+  'text-underline-offset': /^\d+(?:\.\d+)?(?:px|em|rem)$/i,
+  'text-emphasis-style': /^filled dot$/i,
+  'text-emphasis-position': /^under left$/i
+};
+
+function safeInlineStyle(value: string, tagName: string) {
+  const supportsDimension = new Set(['col', 'colgroup', 'img', 'video', 'table', 'td', 'th']).has(tagName);
+  const allowedProperties = supportsDimension
+    ? new Set(['width', 'height'])
+    : new Set(Object.keys(STYLE_VALUE_PATTERNS).filter(property => property !== 'width' && property !== 'height'));
+
+  return value
+    .split(';')
+    .map(declaration => declaration.trim())
+    .filter(Boolean)
+    .map(declaration => {
+      const separator = declaration.indexOf(':');
+      if (separator === -1) return null;
+      const property = declaration.slice(0, separator).trim().toLowerCase();
+      const styleValue = declaration.slice(separator + 1).trim();
+      const pattern = STYLE_VALUE_PATTERNS[property];
+      if (!allowedProperties.has(property) || !pattern || !pattern.test(styleValue)) return null;
+      return `${property}: ${styleValue}`;
+    })
+    .filter((declaration): declaration is string => Boolean(declaration))
+    .join('; ');
 }
 
 /** 检查字符串中是否包含可能破坏日志或文本处理的控制字符。 */
@@ -116,6 +168,43 @@ export function sanitizeEditorHtml(html: string) {
       dropElements: ['script', 'style', 'iframe', 'object', 'embed'],
       allowAttributes: {
         href: ['a'],
+        src: ['img', 'source', 'video'],
+        alt: ['img'],
+        class: ['code', 'div', 'span'],
+        type: ['input'],
+        checked: ['input'],
+        disabled: ['input'],
+        controls: ['video'],
+        poster: ['video'],
+        preload: ['video'],
+        style: [
+          'span',
+          'p',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'li',
+          'ol',
+          'ul',
+          'blockquote',
+          'pre',
+          'code',
+          'table',
+          'colgroup',
+          'col',
+          'thead',
+          'tbody',
+          'tr',
+          'th',
+          'td',
+          'img',
+          'video'
+        ],
+        width: ['img', 'video', 'table', 'colgroup', 'col'],
+        height: ['img', 'video'],
         colspan: ['td', 'th'],
         rowspan: ['td', 'th']
       }
@@ -124,13 +213,54 @@ export function sanitizeEditorHtml(html: string) {
   const document = parse(sanitized);
 
   walkSync(document, node => {
-    if (node.type !== ELEMENT_NODE || node.name !== 'a') return;
-    const href = node.attributes.href;
-    if (!href || !safeExternalUrl(href)) {
-      delete node.attributes.href;
-      return;
+    if (node.type !== ELEMENT_NODE) return;
+
+    if (node.attributes.style) {
+      const style = safeInlineStyle(node.attributes.style, node.name);
+      if (style) node.attributes.style = style;
+      else delete node.attributes.style;
     }
-    node.attributes.href = safeExternalUrl(href) ?? '';
+
+    if (node.attributes.class) {
+      const className = node.attributes.class;
+      const isCodeClass = node.name === 'code' && /^language-[a-z0-9+-]+$/i.test(className);
+      const isDividerClass = node.name === 'div' && className === 'w-e-textarea-divider';
+      const isTokenClass =
+        node.name === 'span' && className.split(/\s+/).every(token => /^token(?:-[a-z-]+)?$|^[a-z-]+$/i.test(token));
+      if (!isCodeClass && !isDividerClass && !isTokenClass) delete node.attributes.class;
+    }
+
+    if (node.name === 'table' || node.name === 'col' || node.name === 'colgroup') {
+      const width = node.attributes.width;
+      if (width && !/^(?:\d{1,4}(?:px|%)?|auto)$/i.test(width)) delete node.attributes.width;
+    }
+
+    if (node.name === 'input') {
+      if (node.attributes.type !== 'checkbox') {
+        node.name = 'span';
+        delete node.attributes.type;
+        delete node.attributes.checked;
+        delete node.attributes.disabled;
+      } else {
+        if (node.attributes.checked !== undefined) node.attributes.checked = '';
+        node.attributes.disabled = '';
+      }
+    }
+
+    if (node.name === 'a') {
+      const href = node.attributes.href;
+      if (!href || !safeExternalUrl(href)) delete node.attributes.href;
+      else node.attributes.href = safeExternalUrl(href) ?? '';
+    }
+
+    if (node.name === 'img' || node.name === 'source' || node.name === 'video') {
+      const src = node.attributes.src;
+      if (src && !safeMediaUrl(src)) delete node.attributes.src;
+    }
+
+    if (node.name === 'video' && node.attributes.poster && !safeMediaUrl(node.attributes.poster)) {
+      delete node.attributes.poster;
+    }
   });
 
   const contentHtml = renderSync(document);
@@ -168,7 +298,6 @@ export function validatePostInput(value: unknown): ValidatedPostInput {
   if (forbiddenFields.some(field => field in value))
     inputError('Author, status, and publication time are server controlled.');
 
-  if (typeof value.type !== 'string' || !ALLOWED_TYPES.has(value.type)) inputError('Unsupported post type.');
   if (typeof value.topic !== 'string' || !value.topic.trim() || value.topic.trim().length > 48)
     inputError('A valid topic is required.');
   if (typeof value.contentHtml !== 'string' || value.contentHtml.length > MAX_HTML_LENGTH)
@@ -176,38 +305,36 @@ export function validatePostInput(value: unknown): ValidatedPostInput {
   if (typeof value.clientNonce !== 'string' || !UUID_PATTERN.test(value.clientNonce))
     inputError('client_nonce must be a UUID.');
 
-  const type = value.type as ValidatedPostInput['type'];
-  const title = type === 'short' ? '' : typeof value.title === 'string' ? value.title.trim() : '';
+  const title = typeof value.title === 'string' ? value.title.trim() : '';
   if (title.length > 160 || hasUnsafeControlCharacter(title)) inputError('title must be at most 160 safe characters.');
-  if (type === 'article' && !title) inputError('Articles require a title.');
-  if (type === 'link' && !title) inputError('Link posts require a title.');
+  if (!title) inputError('A title is required.');
 
   const sanitizedContent = sanitizeEditorHtml(value.contentHtml);
   const contentHtml = sanitizedContent.contentHtml;
-  let contentText = sanitizedContent.contentText;
-  if (type === 'link' && !contentText) contentText = title;
-  if (type !== 'link' && !contentText) inputError('Content must not be empty.');
-  if (contentText.length > MAX_TEXT_LENGTH || contentText.length > MAX_TEXT_LENGTH_BY_TYPE[type])
-    inputError(`Content is too long for ${type} posts.`);
+  const contentText = sanitizedContent.contentText;
+  if (!contentText) inputError('Content must not be empty.');
+  if (contentText.length > MAX_TEXT_LENGTH) inputError('Content is too long.');
 
-  const externalUrl =
-    typeof value.externalUrl === 'string' && value.externalUrl.trim()
-      ? safeExternalUrl(value.externalUrl.trim())
-      : null;
-  if (type === 'link' && !externalUrl) inputError('Link posts require a valid http or https URL.');
-  if (value.externalUrl !== undefined && value.externalUrl !== null && typeof value.externalUrl !== 'string')
-    inputError('external_url must be a string.');
-  if (typeof value.externalUrl === 'string' && value.externalUrl.trim() && !externalUrl)
-    inputError('external_url must use http or https.');
+  const coverAssetId = value.coverAssetId === undefined || value.coverAssetId === null ? null : value.coverAssetId;
+  if (coverAssetId !== null && (typeof coverAssetId !== 'string' || !UUID_PATTERN.test(coverAssetId)))
+    inputError('cover_asset_id must be a UUID.');
+
+  if (!Array.isArray(value.bodyImageAssetIds) || value.bodyImageAssetIds.length > 10)
+    inputError('body_image_asset_ids must contain at most 10 items.');
+  const bodyImageAssetIds = [...new Set(value.bodyImageAssetIds)];
+  if (bodyImageAssetIds.some(id => typeof id !== 'string' || !UUID_PATTERN.test(id)))
+    inputError('body_image_asset_ids must only contain UUIDs.');
 
   return {
-    type,
+    type: 'article',
     topicSlug: value.topic.trim(),
-    title: title || null,
+    title,
     contentHtml,
     contentText,
     excerpt: createExcerpt(contentText),
-    externalUrl,
+    externalUrl: null,
+    coverAssetId,
+    bodyImageAssetIds,
     tags: validateTags(value.tags),
     clientNonce: value.clientNonce,
     readingMinutes: Math.max(1, Math.ceil(Array.from(contentText).length / 400)),

@@ -14,8 +14,8 @@
 ## Phase 2：页面与发布
 
 - [x] Task 4: 公共壳层与金鱼星球首页
-- [x] Task 5: 星球广场与帖子详情阅读
-- [x] Task 6: wangEditor 匿名发帖闭环
+- [ ] Task 5: 星球广场与帖子详情阅读
+- [ ] Task 6: wangEditor 匿名发帖闭环
 
 ## Checkpoint：内容闭环
 
