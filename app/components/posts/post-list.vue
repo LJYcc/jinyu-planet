@@ -26,7 +26,7 @@ function postCover(post: PostListItem, index: number) {
     <nuxt-link
       v-for="(post, index) in posts"
       :key="post.slug"
-      class="post-card"
+      class="post-card arrow-hover"
       :to="`/posts/${post.slug}`"
     >
       <div class="post-card__image">
@@ -79,7 +79,8 @@ function postCover(post: PostListItem, index: number) {
     background-color 0.2s ease;
 }
 
-.post-card:hover {
+.post-card:hover,
+.post-card:focus-visible {
   color: var(--accent-deep);
   transform: none;
 }
@@ -164,6 +165,14 @@ function postCover(post: PostListItem, index: number) {
   margin-left: auto;
   color: var(--ink);
   font-size: 17px;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.post-card:hover .post-card__arrow,
+.post-card:focus-visible .post-card__arrow {
+  color: var(--accent-deep);
 }
 
 @media (max-width: 900px) {
