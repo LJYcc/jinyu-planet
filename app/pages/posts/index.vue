@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DataAnalysis, Promotion, Search } from '@element-plus/icons-vue';
+import { ArrowRight, DataAnalysis, Promotion, Search } from '@element-plus/icons-vue';
 import postsHeroBg from '~/assets/images/bg-posts-lakeside-signal-hero.png';
 import sideTopicImage from '~/assets/images/bg-night-mountain-stars.png';
 import lakeCover from '~/assets/images/post-cover-lakeside-cabin-night.png';
@@ -28,10 +28,12 @@ const pageData = ref<PostsPage | null>(null);
 const keyword = ref('');
 const selectedTopic = ref('');
 const selectedSort = ref<'latest' | 'featured'>('latest');
+const displayedSort = ref<'latest' | 'featured'>('latest');
 const currentPage = ref(1);
 const isLoading = ref(true);
 const loadError = ref('');
 const isFirstLoad = ref(true);
+let postsRequestVersion = 0;
 const planetStats = ref<PlanetStats | null>(null);
 const isPlanetStatsLoading = ref(true);
 const planetStatsError = ref(false);
@@ -39,9 +41,9 @@ const pageSize = 6;
 
 const heroPost = computed(() => pageData.value?.items[0] ?? null);
 const visiblePosts = computed(() => pageData.value?.items.slice(1) ?? []);
-const heroSectionLabel = computed(() => (selectedSort.value === 'featured' ? '精选信号' : '最新抵达'));
-const heroLabel = computed(() => (selectedSort.value === 'featured' ? '精选' : '最新'));
-const listLabel = computed(() => (selectedSort.value === 'featured' ? '更多精选' : '继续探索'));
+const heroSectionLabel = computed(() => (displayedSort.value === 'featured' ? '精选信号' : '最新抵达'));
+const heroLabel = computed(() => (displayedSort.value === 'featured' ? '精选' : '最新'));
+const listLabel = computed(() => (displayedSort.value === 'featured' ? '更多精选' : '继续探索'));
 const weeklyTopic = computed(() => {
   if (!topics.value.length) return null;
 
@@ -100,23 +102,37 @@ function formatDate(value: string) {
   ].join('.');
 }
 
+function settleLatestPostsRequest(requestVersion: number, update: () => void) {
+  if (requestVersion !== postsRequestVersion) return;
+
+  update();
+  isLoading.value = false;
+  isFirstLoad.value = false;
+}
+
 async function loadPosts() {
+  const requestVersion = ++postsRequestVersion;
+  const requestFilters = {
+    topic: selectedTopic.value || undefined,
+    q: keyword.value.trim() || undefined,
+    sort: selectedSort.value,
+    page: currentPage.value,
+    pageSize
+  };
+
   isLoading.value = true;
   loadError.value = '';
   try {
-    pageData.value = await listPosts({
-      topic: selectedTopic.value || undefined,
-      q: keyword.value.trim() || undefined,
-      sort: selectedSort.value,
-      page: currentPage.value,
-      pageSize
+    const result = await listPosts(requestFilters);
+    settleLatestPostsRequest(requestVersion, () => {
+      pageData.value = result;
+      displayedSort.value = requestFilters.sort;
     });
   } catch {
-    pageData.value = null;
-    loadError.value = '星球信号暂时无法读取，请稍后再试。';
-  } finally {
-    isLoading.value = false;
-    isFirstLoad.value = false;
+    settleLatestPostsRequest(requestVersion, () => {
+      pageData.value = null;
+      loadError.value = '星球信号暂时无法读取，请稍后再试。';
+    });
   }
 }
 
@@ -163,6 +179,8 @@ function submitSearch() {
   applyFilters({ q: keyword.value.trim(), page: 1 });
 }
 function selectSort(sort: 'latest' | 'featured') {
+  if (sort === selectedSort.value) return;
+
   applyFilters({ sort, page: 1 });
 }
 function changePage(page: number) {
@@ -329,7 +347,7 @@ watch(
               </div>
               <nuxt-link
                 v-if="heroPost"
-                class="posts-spotlight__card"
+                class="posts-spotlight__card arrow-hover"
                 :to="`/posts/${heroPost.slug}`"
               >
                 <span class="posts-spotlight__image">
@@ -351,13 +369,14 @@ watch(
                     <span class="posts-meta-chip"># {{ heroPost.topic.name }}</span>
                     <time :datetime="heroPost.publishedAt">{{ formatDate(heroPost.publishedAt) }}</time>
                     <span>{{ heroPost.readingMinutes }} 分钟阅读</span>
-                    <span
-                      class="posts-spotlight__arrow"
-                      aria-hidden="true"
-                      >↗</span
-                    >
                   </span>
                 </span>
+                <el-icon
+                  class="posts-spotlight__arrow"
+                  aria-hidden="true"
+                >
+                  <arrow-right />
+                </el-icon>
               </nuxt-link>
             </section>
             <section
@@ -576,6 +595,12 @@ watch(
   color: var(--ink);
   gap: 22px;
   padding: 9px 0;
+  transition: color 0.2s ease;
+}
+
+.posts-spotlight__card:hover,
+.posts-spotlight__card:focus-visible {
+  color: var(--accent-deep);
 }
 
 .posts-spotlight__image {
@@ -625,18 +650,31 @@ watch(
   color: var(--ink);
   font-size: 21px;
   line-height: 1.4;
+  transition: color 0.2s ease;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
 .posts-spotlight__excerpt {
   display: -webkit-box;
+  overflow: hidden;
   margin-top: 8px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.65;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+  white-space: normal;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
+}
+
+.posts-spotlight__card:hover strong,
+.posts-spotlight__card:hover .posts-spotlight__excerpt,
+.posts-spotlight__card:focus-visible strong,
+.posts-spotlight__card:focus-visible .posts-spotlight__excerpt {
+  color: var(--accent-deep);
 }
 
 .posts-spotlight__meta {
@@ -645,7 +683,6 @@ watch(
   gap: 14px;
   align-items: center;
   margin-top: auto;
-  padding-top: 18px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 500;
@@ -666,9 +703,18 @@ watch(
 }
 
 .posts-spotlight__arrow {
+  align-self: center;
   margin-left: auto;
   color: var(--ink);
-  font-size: 22px;
+  font-size: 17px;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.posts-spotlight__card:hover .posts-spotlight__arrow,
+.posts-spotlight__card:focus-visible .posts-spotlight__arrow {
+  color: var(--accent-deep);
 }
 
 .posts-spotlight__card:hover .posts-spotlight__image img {
@@ -891,10 +937,6 @@ watch(
 
   .posts-spotlight__body {
     padding: 0;
-  }
-
-  .posts-spotlight__meta {
-    margin-top: 16px;
   }
 
   .posts-side {
