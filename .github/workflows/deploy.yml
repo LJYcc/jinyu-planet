@@ -215,9 +215,12 @@ jobs:
             if (!config.hasQwenApiKey || !["true", "false"].includes(config.deepThinkingEnabled) || !["true", "false"].includes(config.webSearchEnabled) || !config.hasOssBucket || !config.hasOssRegion || !config.hasOssEndpoint || !config.hasOssAccessKeyId || !config.hasOssAccessKeySecret) process.exit(1);
           '
 
-          echo "===== reloading reverse proxy ====="
-          # 复用已有 Nginx 服务；IP:3000 预览不依赖 Nginx，但正式域名访问会使用它。
-          docker compose -f /opt/stack/nginx/docker-compose.yml up -d --remove-orphans
+          echo "===== validating and reloading reverse proxy ====="
+          # Nginx 配置以 bind mount 提供，仅执行 compose up 不会使已运行容器重新读取配置。
+          # 先确认配置有效，再热重载，从而不中断反向代理的在线请求。
+          docker compose -f /opt/stack/nginx/docker-compose.yml up -d nginx
+          docker compose -f /opt/stack/nginx/docker-compose.yml exec -T nginx nginx -t
+          docker compose -f /opt/stack/nginx/docker-compose.yml exec -T nginx nginx -s reload
 
           echo "===== pruning unused Docker images ====="
           # 新版本已确认运行后，删除所有未被容器使用的旧镜像（包含带 SHA 标签的运行镜像和迁移镜像）。
