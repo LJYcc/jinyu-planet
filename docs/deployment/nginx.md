@@ -2,7 +2,8 @@
 
 Jinyu Planet 的生产容器在 Docker `web` 网络中监听 `3000` 端口，Nginx 通过容器名 `jinyu-planet:3000` 转发请求。对外站点使用：
 
-- 域名：`www.jinyulab.com`
+- 主站域名：`www.jinyulab.com`
+- 裸域名：`jinyulab.com` 以 HTTP 301 跳转至主站域名。
 - Nginx 配置：`E:\\LJYcc\\stack\\nginx\\conf.d\\default.conf`
 - 应用 Compose：`E:\\LJYcc\\stack\\jinyu-planet\\docker-compose.yml`
 
