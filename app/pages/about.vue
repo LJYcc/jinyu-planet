@@ -7,12 +7,19 @@ useSeoMeta({ title: '关于星球 | 金鱼星球', description: '认识金鱼星
 
 const builder = {
   name: '廖瑾宇',
+  cardName: 'Jinyu Liao',
+  cardInitials: 'JY',
   initials: '廖',
   email: '453036921@qq.com',
   githubUrl: 'https://github.com/LJYcc/jinyu-planet',
   resumeUrl: ''
 };
 const isAuthorDialogVisible = ref(false);
+const resumeMailtoUrl = computed(() => {
+  const subject = '简历请求 - 金鱼星球';
+  const body = '你好，Jinyu Liao：\n\n我想进一步了解你的经历，方便提供一份简历吗？\n\n谢谢。';
+  return `mailto:${builder.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+});
 
 const contactBuilder = async () => {
   let copied = false;
@@ -30,6 +37,23 @@ const contactBuilder = async () => {
       ? `已尝试打开邮件客户端，邮箱也已复制：${builder.email}`
       : `已尝试打开邮件客户端，请手动发送至 ${builder.email}`
   );
+};
+
+const requestResume = async () => {
+  let copied = false;
+
+  try {
+    await navigator.clipboard.writeText(builder.email);
+    copied = true;
+  } catch {
+    // Continue to the mailto link even if clipboard access is unavailable.
+  }
+
+  ElMessage.success({
+    message: copied ? '已尝试打开邮件客户端，邮箱也已复制。' : `已尝试打开邮件客户端，请手动复制 ${builder.email}。`,
+    customClass: 'about-author-message',
+    zIndex: 3001
+  });
 };
 
 const currentFeatures = [
@@ -78,10 +102,10 @@ const futureFeatures = [
             <span
               class="about-builder-card__avatar"
               aria-hidden="true"
-              >{{ builder.initials }}</span
+              >{{ builder.cardInitials }}</span
             >
             <span>
-              <strong>{{ builder.name }}</strong>
+              <strong>{{ builder.cardName }}</strong>
               <small>金鱼星球发起人</small>
             </span>
           </div>
@@ -253,6 +277,14 @@ const futureFeatures = [
 
         <p class="about-author-dialog__closing">
           我擅长在复杂需求中找到清晰的落点，也愿意持续用工程实践验证产品想法。金鱼星球正是这份思考的公开实验场。
+        </p>
+        <p class="about-author-dialog__resume-note">
+          如需获取具体简历，
+          <a
+            :href="resumeMailtoUrl"
+            @click="requestResume"
+            >请邮件联系 <span aria-hidden="true">↗</span></a
+          >
         </p>
       </div>
     </el-dialog>
@@ -555,6 +587,9 @@ const futureFeatures = [
   background: #fffef9;
   box-shadow: 0 24px 80px rgba(6, 20, 20, 0.28);
 }
+:global(.about-author-message) {
+  z-index: 3001 !important;
+}
 :global(.about-author-dialog .el-dialog__header) {
   margin: 0;
   padding: 28px 32px 0;
@@ -688,6 +723,23 @@ const futureFeatures = [
   color: #6c776f;
   font-size: 14px;
   line-height: 1.8;
+}
+.about-author-dialog__resume-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0 0;
+  color: #8a948d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.about-author-dialog__resume-note a {
+  margin-left: 2px;
+  font-weight: 600;
+  color: var(--accent-deep);
+}
+.about-author-dialog__resume-note a:hover {
+  color: var(--accent);
 }
 
 @media (max-width: 1024px) {
