@@ -2,6 +2,7 @@ aigc
 atrule
 commitlint
 dashscope
+Jinyu
 Katex
 linkify
 noopener
