@@ -23,6 +23,12 @@ ai-chat-*-check.png
 .tmp-ai-chat-*.png
 _tmp-chrome-profile*/
 
+# Local design and prototype previews
+docs/*-preview.html
+docs/about-career-preview.html
+# Private resume source (used only for local author-profile drafting)
+docs/*简历*.pdf
+
 # Local env files
 .env
 .env.*

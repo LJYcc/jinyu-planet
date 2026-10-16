@@ -149,9 +149,27 @@ watch(
       >
         <article class="post-detail__article">
           <header class="post-detail__header">
-            <div class="post-detail__topic">
-              <span aria-hidden="true">#</span>
-              {{ post.topic.name }}
+            <div class="post-detail__taxonomy flex flex-wrap items-center gap-2">
+              <div class="post-detail__topic">
+                <span aria-hidden="true">#</span>
+                {{ post.topic.name }}
+              </div>
+              <div
+                v-if="post.tags.length"
+                class="post-detail__tags flex flex-wrap gap-2"
+                aria-label="标签"
+              >
+                <el-tag
+                  v-for="tag in post.tags"
+                  :key="tag.slug"
+                  class="post-detail__tag"
+                  effect="plain"
+                  round
+                  size="small"
+                >
+                  {{ tag.name }}
+                </el-tag>
+              </div>
             </div>
             <h1>{{ postDisplayTitle(post) }}</h1>
             <div class="post-detail__meta flex flex-wrap items-center gap-[10px] max-[600px]:gap-2">
@@ -411,6 +429,13 @@ watch(
 
 .post-detail__topic span {
   color: var(--accent-deep);
+}
+
+.post-detail__tag {
+  --el-tag-bg-color: #f4f6f2;
+  --el-tag-border-color: #d8dfd7;
+  --el-tag-text-color: #526158;
+  font-weight: 600;
 }
 
 .post-detail__header h1 {

@@ -50,8 +50,8 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 ### Phase 2：页面与发布
 
 - [x] Task 4: [公共壳层与金鱼星球首页](task-04-shell-and-home.md)
-- [ ] Task 5: [星球广场与帖子详情阅读](task-05-post-discovery.md)
-- [ ] Task 6: [wangEditor 匿名发帖闭环](task-06-anonymous-writing.md)
+- [x] Task 5: [星球广场与帖子详情阅读](task-05-post-discovery.md)
+- [x] Task 6: [wangEditor 匿名发帖闭环](task-06-anonymous-writing.md)
 
 ### Checkpoint：内容闭环
 
@@ -61,7 +61,7 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 ### Phase 3：AI 与质量
 
 - [x] Task 7: [AI Chat 页面与服务端适配器](task-07-ai-chat.md)
-- [ ] Task 8: [响应式、可访问性、SEO 与发布质量](task-08-quality-pass.md)
+- [x] Task 8: [响应式、可访问性、SEO 与发布质量](task-08-quality-pass.md)
 
 ### Phase 4：AI Chat 会话与流式服务
 
@@ -78,8 +78,8 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 
 ### Checkpoint：首版完成
 
-- [ ] 所有任务的验收项已完成。
-- [ ] 人工检查桌面和移动端的首页、广场、详情、发帖、AI 跳转路径。
+- [x] 所有任务的验收项已完成。
+- [x] 人工检查桌面和移动端的首页、广场、详情、发帖、AI 跳转路径。
 - [ ] 上线前已确认限流、内容状态和环境变量配置。
 
 ## 风险与缓解
@@ -98,4 +98,6 @@ Task 4 + Task 5 + Task 6 + Task 9 ─> Task 8: 发布质量检查
 - 对象存储的上传签名/公开 URL 规则。
 - 千问模型、额度、超时和错误重试策略。
 - 下一期为发帖标签增加候选推荐：管理员标记热门/推荐标签并通过人工排序控制顺序，下拉先展示未隐藏的热门标签，再展示普通已有标签，同时允许创建新标签；`Tag` 增加 `isFeatured`、`sortOrder`、`isHidden` 等治理字段，并补充读取 API 与受信任的维护流程。
+- 下一期候选 Task 10：新闻信号板块与星球简报。通过 3–5 个可信新闻 API/RSS 来源定时拉取新闻（默认每小时），按 URL、标题相似度和来源去重，公开页只显示标题、摘要、来源、发布时间、授权配图和原文外链，不抓取或转载全文；每日生成一份带来源链接和生成时间的简报。AI 仅能基于已保存来源完成分类、关键词提取和摘要，不能编造事实；预留 `NewsSource`、`NewsItem`、`NewsDigest` 数据模型，以及供后续 AI 数字人“星球电台”直播安全读取简报的边界。
+- 下一期候选 Task 11：AI 数字人“星球电台”直播。支持定时/预约直播、匿名投稿上墙与主题问答；数字人持续标识为 AI，回答只可引用已核验新闻来源和允许的公开站内内容。直播素材、互动均须经服务端限流和安全校验，结束后生成带时间轴、文字摘要、新闻来源及信号链接的回放；数字人音视频、实时传输和供应商密钥全部由服务端管理。依赖 Task 10 提供的新闻简报数据边界。
 - 站内知识问答、来源引用和 Agent 工具调用属于 Task 9 之后的迭代。
