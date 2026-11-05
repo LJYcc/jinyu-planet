@@ -1,4 +1,4 @@
-/** DashScope 原生多模态流式适配器。 */
+/** 千问 Token Plan OpenAI 兼容流式适配器。 */
 
 export type AiModelMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -39,7 +39,7 @@ export class AiUpstreamError extends Error {
   }
 }
 
-const DEFAULT_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+const DEFAULT_URL = 'https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1/chat/completions';
 const DEFAULT_MODEL = 'qwen3.8-max';
 const DEFAULT_IDLE_TIMEOUT = 30_000;
 
@@ -57,11 +57,9 @@ function getConfig() {
   const apiKey = process.env.QWEN_API_KEY?.trim();
   if (!apiKey) throw new AiServiceUnavailableError();
 
-  // 允许配置完整端点，也兼容只填写 DashScope /v1 基础地址的旧写法。
+  // 允许配置完整端点，也兼容只填写 OpenAI 兼容 /v1 基础地址的写法。
   const configuredUrl = process.env.QWEN_BASE_URL?.trim() || DEFAULT_URL;
-  const url = /\/v1\/?$/i.test(configuredUrl)
-    ? `${configuredUrl.replace(/\/$/, '')}/services/aigc/multimodal-generation/generation`
-    : configuredUrl;
+  const url = /\/v1\/?$/i.test(configuredUrl) ? `${configuredUrl.replace(/\/$/, '')}/chat/completions` : configuredUrl;
   const idleTimeout = Number(process.env.QWEN_TIMEOUT_MS);
 
   return {
@@ -122,25 +120,18 @@ function readSearchSources(value: unknown): AiSearchSource[] | undefined {
   return sources.length ? sources : undefined;
 }
 
-/** 解析 DashScope 原生 SSE 的 output.choices 和 output.search_info。 */
+/** 解析 OpenAI 兼容 SSE 的 choices[].delta 和千问搜索来源扩展字段。 */
 function getDelta(payload: unknown): AiStreamDelta | undefined {
-  // 搜索来源可能先于首个答案片段返回，因此没有文本时也要产出一个 delta。
   if (typeof payload !== 'object' || payload === null) return undefined;
-  const output = (payload as { output?: unknown }).output;
-  if (typeof output !== 'object' || output === null) return undefined;
-
-  const outputRecord = output as { choices?: unknown; search_info?: unknown };
-  const searchSources = readSearchSources(outputRecord.search_info);
-  const firstChoice = Array.isArray(outputRecord.choices) ? outputRecord.choices[0] : undefined;
-  const message =
-    typeof firstChoice === 'object' && firstChoice !== null
-      ? (firstChoice as { message?: unknown }).message
-      : undefined;
-  const messageRecord =
-    typeof message === 'object' && message !== null ? (message as Record<string, unknown>) : undefined;
-  const content = messageRecord ? readText(messageRecord.content) : undefined;
-  const reasoningContent = messageRecord
-    ? (readText(messageRecord.reasoning_content) ?? readText(messageRecord.reasoningContent))
+  const record = payload as { choices?: unknown; search_info?: unknown; searchInfo?: unknown };
+  const searchSources = readSearchSources(record.search_info ?? record.searchInfo);
+  const firstChoice = Array.isArray(record.choices) ? record.choices[0] : undefined;
+  const delta =
+    typeof firstChoice === 'object' && firstChoice !== null ? (firstChoice as { delta?: unknown }).delta : undefined;
+  const deltaRecord = typeof delta === 'object' && delta !== null ? (delta as Record<string, unknown>) : undefined;
+  const content = deltaRecord ? readText(deltaRecord.content) : undefined;
+  const reasoningContent = deltaRecord
+    ? (readText(deltaRecord.reasoning_content) ?? readText(deltaRecord.reasoningContent))
     : undefined;
 
   if (content === undefined && reasoningContent === undefined && !searchSources?.length) return undefined;
@@ -198,36 +189,36 @@ async function* readSseDeltas(
   }
 }
 
-type DashScopeContentItem = { text: string } | { image: string };
+type OpenAiContentItem = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 
-type DashScopeMessage = {
+type OpenAiMessage = {
   role: AiModelMessage['role'];
-  content: DashScopeContentItem[];
+  content: OpenAiContentItem[];
 };
 
-function toDashScopeMessages(messages: AiModelMessage[]): DashScopeMessage[] {
-  // multimodal-generation 使用内容数组；文档文本带文件名边界，避免模型将其误认为用户指令。
+function toOpenAiMessages(messages: AiModelMessage[]): OpenAiMessage[] {
+  // 图片使用兼容协议的 image_url 内容段；文档文本带文件名边界，避免模型将其误认为用户指令。
   return messages.map(message => {
-    const content: DashScopeContentItem[] = [];
+    const content: OpenAiContentItem[] = [];
 
     if (message.content) {
-      content.push({ text: message.content });
+      content.push({ type: 'text', text: message.content });
     }
 
     for (const attachment of message.attachments ?? []) {
       if (attachment.type === 'image') {
-        content.push({ image: attachment.url });
+        content.push({ type: 'image_url', image_url: { url: attachment.url } });
         continue;
       }
 
-      content.push({ text: `\n[附件：${attachment.name}]\n${attachment.text}\n[附件结束]` });
+      content.push({ type: 'text', text: `\n[附件：${attachment.name}]\n${attachment.text}\n[附件结束]` });
     }
 
     return { role: message.role, content };
   });
 }
 
-/** 打开原生多模态 SSE；联网时显式请求真实搜索来源。 */
+/** 打开 OpenAI 兼容 SSE；图片仍使用仅限本次调用读取的 OSS 签名 URL。 */
 export async function openAiStream(
   messages: AiModelMessage[],
   options: { enableThinking?: boolean; enableSearch?: boolean } = {}
@@ -240,23 +231,13 @@ export async function openAiStream(
   try {
     const response = await fetch(config.url, {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${config.apiKey}`,
-        'content-type': 'application/json',
-        // DashScope 原生流式协议通过请求头启用 SSE，而不是 OpenAI 的 stream 字段。
-        'x-dashscope-sse': 'enable'
-      },
+      headers: { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: config.model,
-        input: { messages: toDashScopeMessages(messages) },
-        parameters: {
-          enable_thinking: options.enableThinking === true,
-          enable_search: options.enableSearch === true,
-          // 显式传递 false，避免供应商按模型默认值返回思考内容。
-          incremental_output: true,
-          // enable_source 仅在搜索开启时传递，来源将从 search_info.search_results 返回。
-          ...(options.enableSearch === true ? { search_options: { enable_source: true } } : {})
-        }
+        messages: toOpenAiMessages(messages),
+        stream: true,
+        enable_thinking: options.enableThinking === true,
+        ...(options.enableSearch === true ? { enable_search: true } : {})
       }),
       signal: controller.signal
     });

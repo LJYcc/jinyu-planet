@@ -94,7 +94,7 @@
 - [x] 获取历史消息时可同时恢复思考内容和最终答案；停止、失败或不完整回答不会保存半截 assistant 消息。
 - [x] 网络重试不会重复保存 user 消息；停止或失败时界面可重试且不伪造回答。
 - [x] RAG 和 Agent 工具不在本任务中实现；联网搜索仅按 Phase 6 的后续阶段接入。
-- [x] `qwen3.8-max` 联网搜索通过 DashScope 原生 `multimodal-generation` 流式接口调用；服务端传递 `enable_search`，并在搜索开启时传递 `search_options.enable_source: true` 以取得来源。服务端只读取现有的 `QWEN_API_KEY`。
+- [x] `qwen3.8-max` 通过 Token Plan 的 OpenAI 兼容 `/compatible-mode/v1/chat/completions` 流式接口调用；服务端使用 `stream: true`，传递 `enable_thinking`，联网搜索开启时传递 `enable_search`，并且只展示上游返回的 `search_info.search_results` 来源。服务端只读取现有的 `QWEN_API_KEY`。
 
 **验证：**
 
@@ -106,13 +106,13 @@
 - [x] 手工验证深度思考按钮、无光标的思考区、正在思考/已思考耗时标题、带箭头的背景/边框折叠交互、思考 Markdown 渲染、思考/答案分离流式展示、历史恢复、服务端禁用和伪造参数拒绝。
 - [x] 验证千问错误、停止生成和重复 nonce 场景。
 - [x] 运行 `npx tsc --noEmit` 和 `git diff --check`；不主动运行项目级 lint/build。
-- [x] 手工验证 qwen3.8-max 的 DashScope 原生多模态流式调用、联网搜索开关、`enable_search` 与 `search_options.enable_source` 请求参数、搜索中状态、可信来源标题/链接、来源持久化与历史恢复，以及能力关闭时的服务端拒绝。
+- [x] 手工验证 qwen3.8-max 的 Token Plan OpenAI 兼容多模态流式调用、`stream: true`、联网搜索开关与 `enable_search` 请求参数、搜索中状态、可信来源标题/链接、来源持久化与历史恢复，以及能力关闭时的服务端拒绝。
 
 ## Phase 6：高级 AI 能力分阶段扩展
 
 - [x] 1. **富内容展示：** 支持 KaTeX、Mermaid 与 TOML 高亮；不改变文本消息接口、会话数据或模型请求。
 - [x] 2. **深度思考：** 仅在已确认当前千问模型和账号支持时显示胶囊按钮；服务端通过 `reasoning_delta` 和 `answer_delta` 两类 SSE 事件分离思考增量与最终回答，并分别通过 `reasoningContent`/`content` 字段传输与持久化，前端折叠展示思考过程并支持历史消息恢复，不把它混入最终答案。
-- [x] 3. **联网搜索：** qwen3.8-max 使用 DashScope 原生 `multimodal-generation` 流式接口，服务端始终向千问明确传递 `enable_search: true/false`，并在开启时传递 `search_options.enable_source: true`；用户开启且当前千问模型/账号可用时，通过独立 SSE 事件转发 `search_info.search_results` 中的可信来源；`ai-search-sources` 在每条有来源的 assistant 消息底部展示“已搜索 N 个网页”触发器，点击打开侧边抽屉展示站点、标题、千问返回的摘要和安全链接，不额外抓取网页正文；来源不能由模型文本伪造。来源随 assistant 消息持久化并在幂等重试、历史恢复时回放；能力不可用时不显示开关，伪造请求会被服务端拒绝。
+- [x] 3. **联网搜索：** qwen3.8-max 使用 Token Plan OpenAI 兼容 `/compatible-mode/v1/chat/completions` 流式接口，服务端在用户开启时传递 `enable_search: true`；仅当上游 SSE 返回 `search_info.search_results` 时，才通过独立 SSE 事件转发可信来源。`ai-search-sources` 在每条有来源的 assistant 消息底部展示“已搜索 N 个网页”触发器，点击打开侧边抽屉展示站点、标题、千问返回的摘要和安全链接，不额外抓取网页正文；来源不能由模型文本伪造。来源随 assistant 消息持久化并在幂等重试、历史恢复时回放；能力不可用时不显示开关，伪造请求会被服务端拒绝。
 - [x] 4. **图片与文档：** 新增受保护上传接口、对象存储、MIME/大小/内容校验和文件解析；消息模型改为图文内容数组，图片请求使用视觉模型，文档提取文本需限长、分段并记录来源。
   - [x] 4.0 **文件上传基础：** 已实现受匿名会话保护的 `POST /api/uploads`、私有阿里云 OSS 服务端适配、文件元数据持久化，以及 JPEG、PNG、WebP、GIF、PDF、DOCX、CSV、TXT 的 MIME 白名单、20 MB 限制和文件签名校验。文件对象按用途与访客 ID 隔离，数据库不保存永久公开 URL 或 OSS 凭据；上传 API 暂不在 AI Chat UI 单独暴露，待图文消息、解析和模型调用接入后统一启用。
   - [x] 4.1 **附件消息契约：** 将 user 消息扩展为文本、图片和文档的结构化内容数组；服务端仅接受当前匿名访客已上传且可用的附件 ID，并在消息、历史恢复和幂等重试中保持附件归属。

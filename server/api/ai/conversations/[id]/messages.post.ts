@@ -21,7 +21,7 @@ import {
   validateConversationId,
   validateCurrentMessage
 } from '../../../../utils/ai-chat-validation';
-import { getPublicAiError, throwAiApiError } from '../../../../utils/ai-chat-errors';
+import { getPublicAiError } from '../../../../utils/ai-chat-errors';
 import {
   isDeepThinkingAvailable,
   isWebSearchAvailable,
@@ -148,11 +148,7 @@ export default defineApiHandler(async event => {
           const messageAttachments = await toAiMessageAttachments(message.attachments);
           modelMessages.push({ role: message.role, content: message.content, attachments: messageAttachments });
         }
-        try {
-          upstream = await openAiStream(modelMessages, { enableThinking: deepThinking, enableSearch: webSearch });
-        } catch (error) {
-          throwAiApiError(error);
-        }
+        upstream = await openAiStream(modelMessages, { enableThinking: deepThinking, enableSearch: webSearch });
 
         for await (const delta of upstream.deltas) {
           if (delta.searchSources?.length) {
