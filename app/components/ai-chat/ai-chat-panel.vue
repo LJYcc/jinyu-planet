@@ -370,6 +370,18 @@ async function pinSelectedConversations(conversationIds: string[]) {
 
 /** 从 SSE 错误事件中提取可展示的错误信息。 */
 function parseStreamError(event: StreamEvent) {
+  if (event.code === 'AI_PROVIDER_AUTH_FAILED') {
+    return 'AI 服务鉴权失败，请检查服务端配置。';
+  }
+
+  if (event.code === 'AI_PROVIDER_CREDITS_REQUIRED') {
+    return 'AI 服务当前没有可用额度。';
+  }
+
+  if (event.code === 'AI_PROVIDER_TIMEOUT') {
+    return 'AI 服务响应超时，请稍后重试。';
+  }
+
   if (event.message) {
     return event.message;
   }
